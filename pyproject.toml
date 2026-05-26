@@ -7,6 +7,10 @@ dependencies = [
     "fastapi[standard]",
     "pydantic-settings",
     "sqlmodel",
+    "langchain-openai",
+    "langchain-core",
+    "langgraph",
+    "tavily-python",
 ]
 
 [tool.fastapi]
