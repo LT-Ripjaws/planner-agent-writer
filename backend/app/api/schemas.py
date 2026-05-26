@@ -32,15 +32,15 @@ class BlogRunSummary(BaseModel):
 
 class BlogRunDetail(BlogRunSummary):
     error: str | None = None
-    warnings: list[str] = []
+    warnings: list[str] = Field(default_factory=list)
 
 
 class BlogRunResult(BaseModel):
     id: str
     markdown: str
     plan: dict | None = None
-    evidence: list[dict] = []
-    citations: list[dict] = []
+    evidence: list[dict] = Field(default_factory=list)
+    citations: list[dict] = Field(default_factory=list)
 
 
 class EventEnvelope(BaseModel):
