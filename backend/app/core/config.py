@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "sqlite:///./backend/data/app.db"
     cors_origins: str = "http://localhost:3000"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4.1-mini"
+    tavily_api_key: str | None = None
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
