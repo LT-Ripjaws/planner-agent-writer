@@ -11,6 +11,11 @@ class BlogRun(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
 
     topic: str
+    audience: Optional[str] = None
+    tone: str = "neutral"
+    blog_kind: str = "auto"
+    research_mode: str = "auto"
+    
     status: str = "queued"
     progress_step: str = "created"
 

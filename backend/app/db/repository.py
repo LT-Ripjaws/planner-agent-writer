@@ -9,8 +9,18 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def create_run(session: Session, topic: str) -> BlogRun:
-    run = BlogRun(topic=topic)
+def create_run(
+    session: Session, topic: str, audience: str | None = None,
+    tone: str = "neutral", blog_kind: str = "auto", research_mode: str = "auto") -> BlogRun:
+
+    run = BlogRun(
+        topic=topic,
+        audience=audience,
+        tone=tone,
+        blog_kind=blog_kind,
+        research_mode=research_mode
+    )
+    
     session.add(run)
     session.commit()
     session.refresh(run)
