@@ -1,0 +1,17 @@
+[project]
+name = "planner-agent-writer"
+version = "0.1.0"
+description = "A planning agent backend for writing citation-backed blog drafts."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]",
+    "pydantic-settings",
+    "sqlmodel",
+]
+
+[tool.fastapi]
+entrypoint = "backend.app.main:app"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+exclude = ["frontend*"]
