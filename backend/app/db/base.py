@@ -2,6 +2,7 @@ from collections.abc import Generator
 
 from sqlmodel import Session, SQLModel, create_engine, text
 
+from backend.app.db import models # Yes, I know this import looks unused, but it is intentionally here for model registration.
 from backend.app.core.config import settings
 
 engine = create_engine(
