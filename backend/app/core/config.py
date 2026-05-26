@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     app_name: str = "Planner Agent Writer API"
     environment: str = "development"
     database_url: str = "sqlite:///./backend/data/app.db"
-
+    cors_origins: str = "http://localhost:3000"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
