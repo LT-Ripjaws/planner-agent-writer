@@ -19,6 +19,14 @@ class Settings(BaseSettings):
         default="sqlite:///./backend/data/app.db",
         validation_alias="DATABASE_URL",
     )
+    checkpoint_database_path: str = Field(
+        default="./backend/data/checkpoints.db",
+        validation_alias="CHECKPOINT_DATABASE_PATH",
+    )
+    run_fallback_timeout_seconds: int = Field(
+        default=1800,
+        validation_alias="RUN_FALLBACK_TIMEOUT_SECONDS",
+    )
     cors_origins: str = Field(
         default="http://localhost:3000",
         validation_alias="CORS_ORIGINS",

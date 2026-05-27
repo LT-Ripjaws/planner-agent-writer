@@ -4,6 +4,8 @@ import sys
 from collections.abc import Mapping
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
+
 from backend.app.agents.graph import build_graph
 from backend.app.agents.state import State
 
@@ -105,10 +107,11 @@ async def run_graph_with_progress(
     final_state: Mapping[str, Any] = {}
     seen: set[str] = set()
     last_section_count = 0
+    config: RunnableConfig = {"max_concurrency": max_concurrency}
 
     async for snapshot in graph.astream(
         state,
-        config={"max_concurrency": max_concurrency},
+        config=config,
         stream_mode="values",
     ):
         final_state = snapshot

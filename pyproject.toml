@@ -10,6 +10,8 @@ dependencies = [
     "langchain-openai",
     "langchain-core",
     "langgraph",
+    "langgraph-checkpoint-sqlite",
+    "aiosqlite",
     "tavily-python",
 ]
 
