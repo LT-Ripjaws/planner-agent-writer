@@ -3,6 +3,14 @@ from typing import Annotated, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
+BlogKind = Literal[
+    "explainer",
+    "tutorial",
+    "news_roundup",
+    "comparison",
+    "system_design",
+]
+
 
 class EvidenceItem(BaseModel):
     title: str
@@ -29,13 +37,7 @@ class Plan(BaseModel):
     blog_title: str
     audience: str
     tone: str
-    blog_kind: Literal[
-        "explainer",
-        "tutorial",
-        "news_roundup",
-        "comparison",
-        "system_design",
-    ]
+    blog_kind: BlogKind
     constraints: list[str] = Field(default_factory=list)
     tasks: list[Task] = Field(min_length=5, max_length=9)
 
@@ -64,6 +66,7 @@ class State(TypedDict, total=False):
 
     evidence: list[dict]
     plan: dict | None
+    task: dict
 
     as_of: str
     recency_days: int
