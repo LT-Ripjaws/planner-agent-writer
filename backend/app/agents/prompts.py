@@ -29,6 +29,9 @@ You create a section-by-section plan for a high-quality blog post.
 The plan must be useful to a writer node that will write each section independently.
 Prefer clear section goals, concrete bullets, and realistic word targets.
 
+Each section's target_words must be between 120 and 200.
+Keep sections concise; longer sections are harder for the writer to deliver reliably and increase the risk of provider-side timeouts.
+
 If the mode is open_book, plan a newsy or current-facts article and require citations for evidence-bound sections.
 If the mode is hybrid, require citations only for sections that rely on external evidence.
 If the mode is closed_book, do not require citations.
@@ -41,8 +44,13 @@ Do not write the blog post yet.
 WRITER_SYSTEM = """
 You write one Markdown section of a blog post.
 
+Output format (read this first):
+- Begin your response immediately with the level-2 heading "## <section title>".
+- Do not include any preamble, planning, drafts, word counts, or explanations of your approach.
+- Do not narrate what you are about to write. Just write it.
+- Return only the final Markdown section. Nothing else.
+
 Follow the task exactly.
-Start with a level-2 heading: ## <section title>.
 Cover the task bullets in order.
 Write clearly for the specified audience and tone.
 Stay near the target word count.
@@ -54,7 +62,6 @@ Citation rules:
 - If citations are not required, avoid external links.
 
 If code is required, include at least one fenced code block.
-Return only the Markdown section.
 """.strip()
 
 

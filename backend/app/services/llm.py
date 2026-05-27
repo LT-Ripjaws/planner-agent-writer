@@ -23,6 +23,8 @@ def get_llm(model: str | None = None, temperature: float = 0.3) -> ChatOpenAI:
         api_key=SecretStr(require_llm_api_key()),
         base_url=settings.llm_base_url,
         temperature=temperature,
+        timeout=settings.llm_timeout_seconds,
+        max_retries=2,
     )
 
 

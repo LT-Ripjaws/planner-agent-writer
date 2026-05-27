@@ -26,7 +26,7 @@ class Task(BaseModel):
     title: str
     goal: str
     bullets: list[str] = Field(min_length=3, max_length=6)
-    target_words: int = Field(ge=120, le=550)
+    target_words: int = Field(ge=120, le=220)
     tags: list[str] = Field(default_factory=list)
     requires_research: bool = False
     requires_citations: bool = False
@@ -75,3 +75,5 @@ class State(TypedDict, total=False):
     merged_md: str
     final: str
     warnings: Annotated[list[str], operator.add]
+    max_sections: int
+    writer_timeout_seconds: int

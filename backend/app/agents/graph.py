@@ -24,6 +24,9 @@ def fanout_to_writers(state: State) -> list[Send]:
         raise ValueError("State is missing required field: plan")
 
     parsed_plan = Plan.model_validate(plan)
+    max_sections = state.get("max_sections")
+    tasks = parsed_plan.tasks[:max_sections] if max_sections else parsed_plan.tasks
+
     return [
         Send(
             "writer",
@@ -40,9 +43,10 @@ def fanout_to_writers(state: State) -> list[Send]:
                 "evidence": state.get("evidence", []),
                 "plan": parsed_plan.model_dump(),
                 "task": task.model_dump(),
+                "writer_timeout_seconds": state.get("writer_timeout_seconds", 360),
             },
         )
-        for task in parsed_plan.tasks
+        for task in tasks
     ]
 
 
