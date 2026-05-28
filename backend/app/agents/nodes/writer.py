@@ -6,7 +6,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from backend.app.agents.prompts import WRITER_SYSTEM
+from backend.app.agents.prompts import WRITER_SYSTEM, wrap_untrusted
 from backend.app.agents.state import Plan, State, Task
 from backend.app.services.llm import get_llm
 
@@ -51,20 +51,20 @@ def content_to_text(content: Any) -> str:
 def build_writer_prompt(state: State, task: Task, plan: Plan) -> str:
     evidence = state.get("evidence", [])
     evidence_block = (
-        f"\n\nAvailable evidence:\n{json.dumps(evidence[:16], indent=2)}"
+        "\n\n" + wrap_untrusted("evidence", json.dumps(evidence[:16], indent=2))
         if evidence
         else ""
     )
     return f"""
 Blog title: {plan.blog_title}
-Topic: {state.get("topic", "")}
+{wrap_untrusted("user_topic", state.get("topic", ""))}
+
 Audience: {plan.audience}
 Tone: {plan.tone}
 Mode: {state.get("mode", "closed_book")}
 As of date: {state.get("as_of", "unknown")}
 
-Task:
-{task.model_dump_json(indent=2)}{evidence_block}
+{wrap_untrusted("task", task.model_dump_json(indent=2))}{evidence_block}
 
 Write only this section.
 """.strip()

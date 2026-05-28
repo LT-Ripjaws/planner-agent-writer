@@ -2,7 +2,7 @@ from datetime import date
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from backend.app.agents.prompts import ROUTER_SYSTEM
+from backend.app.agents.prompts import ROUTER_SYSTEM, wrap_untrusted
 from backend.app.agents.state import RouterDecision, State
 from backend.app.services.llm import get_llm, structured
 
@@ -29,15 +29,16 @@ def build_router_prompt(state: State) -> str:
     topic = require_topic(state)
 
     return f"""
-    Topic: {topic}
-    Audience: {state.get("audience") or "general"}
-    Tone: {state.get("tone") or "neutral"}
-    Requested blog kind: {state.get("blog_kind") or "auto"}
-    Research mode requested by user: {state.get("research_mode") or "auto"}
+{wrap_untrusted("user_topic", topic)}
 
-    Today is {date.today().isoformat()}.
-    Decide whether this blog requires external research.
-    """.strip()
+Audience: {state.get("audience") or "general"}
+Tone: {state.get("tone") or "neutral"}
+Requested blog kind: {state.get("blog_kind") or "auto"}
+Research mode requested by user: {state.get("research_mode") or "auto"}
+
+Today is {date.today().isoformat()}.
+Decide whether the topic above requires external research.
+""".strip()
 
 
 async def router_node(state: State) -> State:

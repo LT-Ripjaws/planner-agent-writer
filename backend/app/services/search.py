@@ -6,6 +6,11 @@ from tavily import AsyncTavilyClient
 from backend.app.agents.state import EvidenceItem
 from backend.app.core.config import settings
 
+# Cap each snippet's length before it reaches the LLM. Long snippets are
+# more likely to hide injection payloads, and tighter caps also save tokens
+# on every downstream node (planner, writer, evaluator).
+MAX_SNIPPET_CHARS = 1000
+
 
 def require_tavily_api_key() -> str:
     if not settings.tavily_api_key:
@@ -27,6 +32,14 @@ def source_from_url(url: str) -> str | None:
     return hostname.removeprefix("www.")
 
 
+def truncate_snippet(snippet: str, limit: int = MAX_SNIPPET_CHARS) -> str:
+    """Bound snippet length, marking truncation visibly so the LLM knows
+    the source was longer than what it sees."""
+    if len(snippet) <= limit:
+        return snippet
+    return snippet[:limit].rstrip() + " […truncated]"
+
+
 def normalize_hit(hit: dict) -> EvidenceItem | None:
     url = hit.get("url")
     title = hit.get("title")
@@ -39,7 +52,7 @@ def normalize_hit(hit: dict) -> EvidenceItem | None:
         title=title,
         url=url,
         published_at=hit.get("published_date") or hit.get("published_at"),
-        snippet=snippet,
+        snippet=truncate_snippet(snippet),
         source=source_from_url(url),
         score=hit.get("score"),
     )

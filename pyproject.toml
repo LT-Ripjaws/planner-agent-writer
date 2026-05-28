@@ -13,6 +13,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite",
     "aiosqlite",
     "tavily-python",
+    "slowapi",
 ]
 
 [tool.fastapi]

@@ -3,7 +3,7 @@ from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from backend.app.agents.prompts import PLANNER_SYSTEM
+from backend.app.agents.prompts import PLANNER_SYSTEM, wrap_untrusted
 from backend.app.agents.state import BlogKind, Plan, State
 from backend.app.services.llm import get_llm, structured
 
@@ -27,9 +27,9 @@ def require_topic(state: State) -> str:
 def evidence_preview(state: State) -> str:
     evidence = state.get("evidence", [])
     if not evidence:
-        return "No external evidence provided."
+        return wrap_untrusted("evidence", "No external evidence provided.")
 
-    return json.dumps(evidence[:16], indent=2)
+    return wrap_untrusted("evidence", json.dumps(evidence[:16], indent=2))
 
 
 def requested_blog_kind(state: State) -> BlogKind | None:
@@ -42,7 +42,8 @@ def requested_blog_kind(state: State) -> BlogKind | None:
 
 def build_planner_prompt(state: State) -> str:
     return f"""
-Topic: {require_topic(state)}
+{wrap_untrusted("user_topic", require_topic(state))}
+
 Audience: {state.get("audience") or "general"}
 Tone: {state.get("tone") or "neutral"}
 Requested blog kind: {requested_blog_kind(state) or "auto"}
@@ -50,7 +51,6 @@ Research mode: {state.get("research_mode", "auto")}
 Resolved mode: {state.get("mode", "closed_book")}
 As of date: {state.get("as_of", "unknown")}
 
-Evidence:
 {evidence_preview(state)}
 
 Create a blog plan that a set of parallel writer nodes can execute.

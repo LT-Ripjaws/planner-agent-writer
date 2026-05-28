@@ -3,10 +3,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlmodel import Session
 
 from backend.app.api.blog_runs import router as blog_runs_router
@@ -14,9 +16,16 @@ from backend.app.api.events import router as events_router
 from backend.app.core.config import settings
 from backend.app.db import repository
 from backend.app.db.base import engine, init_db
+from backend.app.deps import limiter
 from backend.app.services.runtime import set_checkpointer
 
 logger = logging.getLogger(__name__)
+
+
+def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, RateLimitExceeded):
+        raise exc
+    return _rate_limit_exceeded_handler(request, exc)
 
 
 @asynccontextmanager
@@ -51,6 +60,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+# register the limiter on app state + RateLimitExceeded handler so any
+# route decorated with @limiter.limit(...) actually enforces it.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 cors_origins = [
     origin.strip()
