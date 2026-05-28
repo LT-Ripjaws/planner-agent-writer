@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlmodel import Session
 
 from backend.app.api.schemas import (
@@ -10,9 +10,11 @@ from backend.app.api.schemas import (
     BlogRunResult,
     BlogRunSummary,
 )
+from backend.app.core.config import settings
 from backend.app.db import repository
 from backend.app.db.base import get_session
 from backend.app.db.models import BlogRun
+from backend.app.deps import limiter
 from backend.app.workers import runner
 
 router = APIRouter(prefix="/blog-runs", tags=["blog-runs"])
@@ -60,7 +62,9 @@ def to_detail(run: BlogRun) -> BlogRunDetail:
 
 
 @router.post("", status_code=202, response_model=BlogRunSummary)
+@limiter.limit(f"{settings.rate_limit_runs_per_min}/minute")
 def create_blog_run(
+    request: Request,
     payload: BlogRunCreate,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
@@ -114,6 +118,7 @@ def get_blog_run_result(
 
     plan = parse_json_value(run.plan_json, None)
     evidence = parse_json_value(run.evidence_json, [])
+    quality = parse_json_value(run.quality_report_json, None)
 
     return BlogRunResult(
         id=run.id,
@@ -121,6 +126,7 @@ def get_blog_run_result(
         plan=plan if isinstance(plan, dict) else None,
         evidence=evidence if isinstance(evidence, list) else [],
         citations=[],
+        quality_report=quality if isinstance(quality, dict) else None,
     )
 
 

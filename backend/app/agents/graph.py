@@ -7,12 +7,18 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from backend.app.agents.nodes.citation_guard import citation_guard_node
 from backend.app.agents.nodes.planner import planner_node
+from backend.app.agents.nodes.quality_evaluator import (
+    quality_evaluator_node,
+    should_loop_quality,
+)
 from backend.app.agents.nodes.reducer import reducer_node
 from backend.app.agents.nodes.research import research_node
 from backend.app.agents.nodes.router import router_node
 from backend.app.agents.nodes.writer import writer_node
 from backend.app.agents.state import Plan, State
+from backend.app.core.config import settings
 from backend.app.services.progress import ProgressBus
 
 NodeFunc = Callable[[State], Awaitable[State] | State]
@@ -158,6 +164,14 @@ def build_graph(
         "reducer",
         RunnableLambda(wrap_with_progress("reducer", reducer_node, progress)),
     )
+    graph.add_node(
+        "citation_guard",
+        RunnableLambda(wrap_with_progress("citation_guard", citation_guard_node, progress)),
+    )
+    graph.add_node(
+        "quality_eval",
+        RunnableLambda(wrap_with_progress("quality_eval", quality_evaluator_node, progress)),
+    )
 
     graph.add_edge(START, "router")
     graph.add_conditional_edges(
@@ -171,6 +185,23 @@ def build_graph(
     graph.add_edge("research", "planner")
     graph.add_conditional_edges("planner", fanout_to_writers, ["writer"])
     graph.add_edge("writer", "reducer")
-    graph.add_edge("reducer", END)
+    graph.add_edge("reducer", "citation_guard")
+
+    if settings.quality_eval_enabled:
+        # citation_guard → quality_eval; quality_eval loops back to itself
+        # until the threshold or iteration cap is reached. After improvement
+        # passes, we route back through citation_guard so newly-written
+        # sections also have their citations whitelisted.
+        graph.add_edge("citation_guard", "quality_eval")
+        graph.add_conditional_edges(
+            "quality_eval",
+            should_loop_quality,
+            {
+                "loop": "citation_guard",
+                "end": END,
+            },
+        )
+    else:
+        graph.add_edge("citation_guard", END)
 
     return graph.compile(checkpointer=checkpointer)

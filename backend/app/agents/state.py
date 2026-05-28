@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Literal, Optional, TypedDict
+from typing import Annotated, Any, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +50,46 @@ class RouterDecision(BaseModel):
     max_results_per_query: int = Field(default=5, ge=1, le=10)
 
 
+#  Quality evaluation
+
+
+IssueCategory = Literal[
+    "off_topic",
+    "incomplete",
+    "tone",
+    "missing_code",
+    "length",
+]
+
+Severity = Literal["low", "medium", "high"]
+
+
+class Issue(BaseModel):
+    task_id: int
+    category: IssueCategory
+    severity: Severity
+    description: str = Field(min_length=3, max_length=500)
+
+
+class HallucinationFlag(BaseModel):
+    task_id: int
+    claim: str = Field(min_length=3, max_length=600)
+    severity: Severity
+    rationale: str = Field(min_length=3, max_length=600)
+
+
+class QualityReport(BaseModel):
+    overall_score: float = Field(ge=0, le=10)
+    on_topic: bool
+    on_topic_reason: Optional[str] = None
+    completeness: float = Field(ge=0, le=1)
+    tone_match: bool
+    code_present_where_required: bool
+    issues: list[Issue] = Field(default_factory=list)
+    hallucinations: list[HallucinationFlag] = Field(default_factory=list)
+    sections_to_redo: list[int] = Field(default_factory=list, max_length=3)
+
+
 class State(TypedDict, total=False):
     run_id: str
 
@@ -77,3 +117,7 @@ class State(TypedDict, total=False):
     warnings: Annotated[list[str], operator.add]
     max_sections: int
     writer_timeout_seconds: int
+
+    # quality evaluation
+    quality_report: dict[str, Any]
+    improvement_iter: int

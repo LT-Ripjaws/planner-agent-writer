@@ -97,6 +97,19 @@ def save_warnings(session: Session, run: BlogRun, warnings: list[str]) -> BlogRu
     return run
 
 
+def save_quality_report(
+    session: Session,
+    run: BlogRun,
+    report: dict[str, Any],
+) -> BlogRun:
+    run.quality_report_json = json.dumps(report)
+    run.updated_at = utc_now()
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
 def mark_running(session: Session, run: BlogRun) -> BlogRun:
     run.status = "running"
     run.progress_step = "running"

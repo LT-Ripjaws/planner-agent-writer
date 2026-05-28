@@ -27,6 +27,26 @@ class Settings(BaseSettings):
         default=1800,
         validation_alias="RUN_FALLBACK_TIMEOUT_SECONDS",
     )
+    rate_limit_runs_per_min: int = Field(
+        default=6,
+        validation_alias="RATE_LIMIT_RUNS_PER_MIN",
+    )
+    quality_eval_enabled: bool = Field(
+        default=True,
+        validation_alias="QUALITY_EVAL_ENABLED",
+    )
+    quality_threshold: float = Field(
+        default=7.0,
+        validation_alias="QUALITY_THRESHOLD",
+    )
+    quality_max_iterations: int = Field(
+        default=2,
+        validation_alias="QUALITY_MAX_ITERATIONS",
+    )
+    quality_max_sections_per_iter: int = Field(
+        default=3,
+        validation_alias="QUALITY_MAX_SECTIONS_PER_ITER",
+    )
     cors_origins: str = Field(
         default="http://localhost:3000",
         validation_alias="CORS_ORIGINS",

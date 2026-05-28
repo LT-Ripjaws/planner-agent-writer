@@ -80,6 +80,10 @@ def persist_partial(run_id: str, state: Mapping[str, Any]) -> None:
         if isinstance(warnings, list):
             repository.save_warnings(session, run, [str(warning) for warning in warnings])
 
+        quality_report = state.get("quality_report")
+        if isinstance(quality_report, dict):
+            repository.save_quality_report(session, run, quality_report)
+
 
 async def _stream_graph(
     run_id: str,

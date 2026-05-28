@@ -27,6 +27,7 @@ class BlogRun(SQLModel, table=True):
     evidence_json: Optional[str] = None
     markdown: Optional[str] = None
     warnings_json: Optional[str] = None
+    quality_report_json: Optional[str] = None
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
