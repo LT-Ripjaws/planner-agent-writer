@@ -1,8 +1,10 @@
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from backend.app.agents.state import Plan
 
 # Jailbreak phrase denylist. Compiled once at import time.
 # Catches the most common low-effort prompt-injection attempts in the topic
@@ -65,6 +67,20 @@ class BlogRunSummary(BaseModel):
 class BlogRunDetail(BlogRunSummary):
     error: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    plan: dict | None = None
+
+
+class PlanApprovalDecision(BaseModel):
+    action: Literal["approve", "reject"]
+    plan: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_edited_plan(self) -> "PlanApprovalDecision":
+        if self.action == "approve" and self.plan is not None:
+            validated_plan = Plan.model_validate(self.plan)
+            self.plan = validated_plan.model_dump()
+
+        return self
 
 
 class BlogRunResult(BaseModel):
@@ -83,6 +99,7 @@ class EventEnvelope(BaseModel):
         "node_completed",
         "section",
         "warning",
+        "awaiting_input",
         "done",
         "error",
     ]

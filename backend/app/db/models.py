@@ -28,6 +28,7 @@ class BlogRun(SQLModel, table=True):
     markdown: Optional[str] = None
     warnings_json: Optional[str] = None
     quality_report_json: Optional[str] = None
+    awaiting_approval_started_at: Optional[datetime] = None
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

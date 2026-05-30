@@ -147,6 +147,8 @@ def wrap_with_progress(
 def build_graph(
     progress: ProgressBus | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
+    *,
+    hitl_plan_approval: bool = False,
 ):
     graph = StateGraph(State)
 
@@ -204,4 +206,8 @@ def build_graph(
     else:
         graph.add_edge("citation_guard", END)
 
-    return graph.compile(checkpointer=checkpointer)
+    interrupt_after = ["planner"] if hitl_plan_approval else None
+    return graph.compile(
+        checkpointer=checkpointer,
+        interrupt_after=interrupt_after,
+    )

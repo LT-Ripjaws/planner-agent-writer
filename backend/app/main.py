@@ -43,6 +43,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if swept:
         logger.warning("Swept %d orphaned 'running' blog run(s) at startup", swept)
 
+    with Session(engine) as session:
+        expired_approvals = repository.sweep_expired_approvals(
+            session,
+            hours=settings.hitl_approval_timeout_hours,
+        )
+    if expired_approvals:
+        logger.warning(
+            "Swept %d expired plan approval blog run(s) at startup",
+            expired_approvals,
+        )
+
     # Ensure the checkpoint database directory exists.
     checkpoint_path = Path(settings.checkpoint_database_path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

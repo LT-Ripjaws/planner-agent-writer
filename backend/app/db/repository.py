@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -113,6 +113,7 @@ def save_quality_report(
 def mark_running(session: Session, run: BlogRun) -> BlogRun:
     run.status = "running"
     run.progress_step = "running"
+    run.awaiting_approval_started_at = None
     run.updated_at = utc_now()
     session.add(run)
     session.commit()
@@ -129,6 +130,7 @@ def mark_completed(
 ) -> BlogRun:
     run.status = "completed_with_warnings" if with_warnings else "completed"
     run.progress_step = "completed"
+    run.awaiting_approval_started_at = None
     if markdown is not None:
         run.markdown = markdown
     run.updated_at = utc_now()
@@ -142,11 +144,31 @@ def mark_failed(session: Session, run: BlogRun, error: str) -> BlogRun:
     run.status = "failed"
     run.progress_step = "failed"
     run.error = error
+    run.awaiting_approval_started_at = None
     run.updated_at = utc_now()
     session.add(run)
     session.commit()
     session.refresh(run)
     return run
+
+
+def mark_awaiting_approval(session: Session, run: BlogRun) -> BlogRun:
+    run.status = "awaiting_approval"
+    run.progress_step = "awaiting_plan_approval"
+    run.awaiting_approval_started_at = utc_now()
+    run.error = None
+    run.updated_at = utc_now()
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc)
 
 
 def sweep_orphaned_running(session: Session, reason: str) -> int:
@@ -171,3 +193,30 @@ def sweep_orphaned_running(session: Session, reason: str) -> int:
         session.commit()
 
     return len(orphans)
+
+
+def sweep_expired_approvals(session: Session, hours: int) -> int:
+    """Fail runs that were left awaiting plan approval past the timeout."""
+    statement = select(BlogRun).where(BlogRun.status == "awaiting_approval")
+    awaiting = list(session.exec(statement).all())
+    now = utc_now()
+    cutoff = now - timedelta(hours=hours)
+    expired: list[BlogRun] = []
+
+    for run in awaiting:
+        started_at = run.awaiting_approval_started_at
+        if started_at is None or _as_aware_utc(started_at) < cutoff:
+            expired.append(run)
+
+    for run in expired:
+        run.status = "failed"
+        run.progress_step = "failed"
+        run.error = "approval timeout"
+        run.awaiting_approval_started_at = None
+        run.updated_at = now
+        session.add(run)
+
+    if expired:
+        session.commit()
+
+    return len(expired)

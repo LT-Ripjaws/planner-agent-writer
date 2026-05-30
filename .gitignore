@@ -6,3 +6,9 @@ data/
 *.egg-info/
 backend/data/*
 !backend/data/.gitkeep
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+.tools/

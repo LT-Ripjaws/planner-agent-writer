@@ -31,6 +31,14 @@ class Settings(BaseSettings):
         default=6,
         validation_alias="RATE_LIMIT_RUNS_PER_MIN",
     )
+    hitl_plan_approval_enabled: bool = Field(
+        default=False,
+        validation_alias="HITL_PLAN_APPROVAL_ENABLED",
+    )
+    hitl_approval_timeout_hours: int = Field(
+        default=24,
+        validation_alias="HITL_APPROVAL_TIMEOUT_HOURS",
+    )
     quality_eval_enabled: bool = Field(
         default=True,
         validation_alias="QUALITY_EVAL_ENABLED",

@@ -49,6 +49,18 @@ def parse_warnings(value: str | None) -> list[str]:
     return [str(warning) for warning in warnings]
 
 
+def parse_plan(value: str | None) -> dict | None:
+    if not value:
+        return None
+
+    try:
+        plan = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+
+    return plan if isinstance(plan, dict) else None
+
+
 async def terminal_stream(
     run_id: str,
     status: str,
@@ -81,7 +93,7 @@ async def terminal_stream(
     )
 
 
-def snapshot_for(run: BlogRun) -> dict[str, str | None]:
+def snapshot_for(run: BlogRun) -> dict[str, object]:
     """DB-derived snapshot sent on the initial `status: subscribed` event.
 
     A late SSE subscriber (curl with a delay, or a frontend tab refresh
@@ -90,12 +102,16 @@ def snapshot_for(run: BlogRun) -> dict[str, str | None]:
     the snapshot gives the client a coherent boot state independent of
     buffer retention.
     """
-    return {
+    snapshot: dict[str, object] = {
         "status": run.status,
         "progress_step": run.progress_step,
         "mode": run.mode,
         "blog_title": run.blog_title,
     }
+    if run.status == "awaiting_approval":
+        snapshot["plan"] = parse_plan(run.plan_json)
+
+    return snapshot
 
 
 async def live_stream(

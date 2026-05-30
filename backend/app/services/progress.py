@@ -11,6 +11,7 @@ ProgressEventType = Literal[
     "node_completed",
     "section",
     "warning",
+    "awaiting_input",
     "done",
     "error",
 ]

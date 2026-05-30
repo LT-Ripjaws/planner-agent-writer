@@ -9,6 +9,7 @@ from backend.app.api.schemas import (
     BlogRunDetail,
     BlogRunResult,
     BlogRunSummary,
+    PlanApprovalDecision,
 )
 from backend.app.core.config import settings
 from backend.app.db import repository
@@ -54,10 +55,12 @@ def to_summary(run: BlogRun) -> BlogRunSummary:
 
 
 def to_detail(run: BlogRun) -> BlogRunDetail:
+    plan = parse_json_value(run.plan_json, None)
     return BlogRunDetail(
         **to_summary(run).model_dump(),
         error=run.error,
         warnings=warnings_for(run),
+        plan=plan if isinstance(plan, dict) else None,
     )
 
 
@@ -147,5 +150,37 @@ def resume_blog_run(
         )
 
     background_tasks.add_task(runner.resume, run.id)
+
+    return to_summary(run)
+
+
+@router.post("/{run_id}/approve-plan", status_code=202, response_model=BlogRunSummary)
+@limiter.limit(f"{settings.rate_limit_runs_per_min}/minute")
+def approve_blog_run_plan(
+    request: Request,
+    run_id: str,
+    payload: PlanApprovalDecision,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> BlogRunSummary:
+    run = repository.get_run(session, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Blog run not found")
+
+    if run.status != "awaiting_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot approve plan for run in status '{run.status}'; "
+                "only 'awaiting_approval' runs accept plan decisions"
+            ),
+        )
+
+    background_tasks.add_task(
+        runner.continue_after_approval,
+        run.id,
+        payload.action,
+        payload.plan,
+    )
 
     return to_summary(run)

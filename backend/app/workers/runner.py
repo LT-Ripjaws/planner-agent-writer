@@ -1,13 +1,15 @@
 import asyncio
 import logging
 from collections.abc import Mapping
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import StateSnapshot
 from sqlmodel import Session
 
 from backend.app.agents.graph import build_graph
-from backend.app.agents.state import State
+from backend.app.agents.state import Plan, State
 from backend.app.core.config import settings
 from backend.app.db import repository
 from backend.app.db.base import engine
@@ -17,6 +19,13 @@ from backend.app.services.runtime import get_checkpointer
 from backend.app.workers.retry import retry_placeholders
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class GraphRunResult:
+    status: Literal["complete", "paused"]
+    state: Mapping[str, Any]
+    snapshot: StateSnapshot | None = None
 
 
 def build_initial_state(run: BlogRun) -> State:
@@ -85,28 +94,41 @@ def persist_partial(run_id: str, state: Mapping[str, Any]) -> None:
             repository.save_quality_report(session, run, quality_report)
 
 
+def graph_config(run_id: str, checkpointer: object | None) -> RunnableConfig:
+    if checkpointer is not None:
+        return {
+            "max_concurrency": 3,
+            "configurable": {"thread_id": run_id},
+        }
+
+    return {"max_concurrency": 3}
+
+
+def snapshot_values(
+    snapshot: StateSnapshot,
+    fallback: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    return snapshot.values if isinstance(snapshot.values, Mapping) else fallback
+
+
 async def _stream_graph(
     run_id: str,
     initial_state: State | None,
     bus: ProgressBus,
-) -> Mapping[str, Any]:
-    """Stream the graph to completion; return the final state snapshot.
+) -> GraphRunResult:
+    """Stream the graph until completion or a LangGraph interrupt.
 
     ``initial_state=None`` resumes from the checkpointer's saved state
     (LangGraph behavior: passing ``None`` plus an existing thread_id continues
     from the last persisted node).
     """
     checkpointer = get_checkpointer()
-    graph = build_graph(bus, checkpointer=checkpointer)
-
-    config: RunnableConfig = (
-        {
-            "max_concurrency": 3,
-            "configurable": {"thread_id": run_id},
-        }
-        if checkpointer is not None
-        else {"max_concurrency": 3}
+    graph = build_graph(
+        bus,
+        checkpointer=checkpointer,
+        hitl_plan_approval=settings.hitl_plan_approval_enabled,
     )
+    config = graph_config(run_id, checkpointer)
 
     final_state: Mapping[str, Any] = {}
     async for snapshot in graph.astream(
@@ -117,7 +139,67 @@ async def _stream_graph(
         final_state = snapshot
         persist_partial(run_id, snapshot)
 
-    return final_state
+    if checkpointer is not None:
+        state_snapshot = await graph.aget_state(config)
+        if state_snapshot.next:
+            paused_state = snapshot_values(state_snapshot, final_state)
+            persist_partial(run_id, paused_state)
+            return GraphRunResult(
+                status="paused",
+                state=paused_state,
+                snapshot=state_snapshot,
+            )
+
+    return GraphRunResult(status="complete", state=final_state)
+
+
+async def _pause_for_plan_approval(
+    run_id: str,
+    state: Mapping[str, Any],
+    bus: ProgressBus,
+) -> None:
+    plan = state.get("plan")
+    if not isinstance(plan, dict):
+        raise RuntimeError("graph paused for plan approval without a plan")
+
+    with Session(engine) as session:
+        run = repository.get_run(session, run_id)
+        if run is None:
+            raise RuntimeError("blog run disappeared before plan approval pause")
+
+        repository.save_plan(session, run, plan)
+        repository.mark_awaiting_approval(session, run)
+
+    await bus.publish(
+        run_id,
+        "status",
+        {
+            "status": "awaiting_approval",
+            "progress_step": "awaiting_plan_approval",
+        },
+    )
+    await bus.publish(
+        run_id,
+        "awaiting_input",
+        {
+            "type": "plan_approval",
+            "plan": plan,
+        },
+    )
+
+
+async def _mark_failed_and_publish(
+    run_id: str,
+    reason: str,
+    bus: ProgressBus,
+) -> None:
+    with Session(engine) as session:
+        run = repository.get_run(session, run_id)
+        if run is not None:
+            repository.mark_failed(session, run, reason)
+
+    await bus.publish(run_id, "status", {"status": "failed"})
+    await bus.publish(run_id, "error", {"reason": reason})
 
 
 async def _finalize_run(
@@ -162,7 +244,12 @@ async def _finalize_run(
     await bus.publish(run_id, "done", {"status": status})
 
 
-async def _drive_graph(run_id: str, initial_state: State | None) -> None:
+async def _drive_graph(
+    run_id: str,
+    initial_state: State | None,
+    *,
+    allow_pause: bool = True,
+) -> None:
     """Run a graph with all safety nets, then finalize.
 
     Used by both ``execute()`` (fresh runs) and ``resume()`` (continue from
@@ -170,40 +257,36 @@ async def _drive_graph(run_id: str, initial_state: State | None) -> None:
     and emitting the initial ``status`` event before calling this.
     """
     bus = get_progress_bus()
+    close_bus = True
 
     try:
-        final_state = await asyncio.wait_for(
+        result = await asyncio.wait_for(
             _stream_graph(run_id, initial_state, bus),
             timeout=settings.run_fallback_timeout_seconds,
         )
-        await _finalize_run(run_id, final_state, bus)
+        if result.status == "paused":
+            if not allow_pause:
+                raise RuntimeError("graph paused unexpectedly after plan approval")
+
+            await _pause_for_plan_approval(run_id, result.state, bus)
+            close_bus = False
+            return
+
+        await _finalize_run(run_id, result.state, bus)
     except asyncio.TimeoutError:
         reason = (
             f"run exceeded fallback timeout of "
             f"{settings.run_fallback_timeout_seconds}s"
         )
         logger.error("Blog run %s timed out: %s", run_id, reason)
-
-        with Session(engine) as session:
-            run = repository.get_run(session, run_id)
-            if run is not None:
-                repository.mark_failed(session, run, reason)
-
-        await bus.publish(run_id, "status", {"status": "failed"})
-        await bus.publish(run_id, "error", {"reason": reason})
+        await _mark_failed_and_publish(run_id, reason, bus)
     except Exception as exc:
         logger.exception("Blog run %s failed", run_id)
         reason = f"{type(exc).__name__}: {exc}"
-
-        with Session(engine) as session:
-            run = repository.get_run(session, run_id)
-            if run is not None:
-                repository.mark_failed(session, run, reason)
-
-        await bus.publish(run_id, "status", {"status": "failed"})
-        await bus.publish(run_id, "error", {"reason": reason})
+        await _mark_failed_and_publish(run_id, reason, bus)
     finally:
-        await bus.close(run_id)
+        if close_bus:
+            await bus.close(run_id)
 
 
 async def execute(run_id: str) -> None:
@@ -266,3 +349,84 @@ async def resume(run_id: str) -> None:
         logger.info("No checkpoint for blog run %s; restarting from scratch", run_id)
         await bus.publish(run_id, "status", {"status": "running", "resumed": False})
         await _drive_graph(run_id, fallback_state)
+
+
+async def continue_after_approval(
+    run_id: str,
+    action: str,
+    plan: dict[str, Any] | None = None,
+) -> None:
+    """Continue or terminate a run currently paused after the planner."""
+    bus = get_progress_bus()
+
+    if action == "reject":
+        with Session(engine) as session:
+            run = repository.get_run(session, run_id)
+            if run is None or run.status != "awaiting_approval":
+                return
+
+            repository.mark_failed(session, run, "user rejected plan")
+
+        await bus.publish(run_id, "status", {"status": "failed"})
+        await bus.publish(run_id, "error", {"reason": "user rejected plan"})
+        await bus.close(run_id)
+        return
+
+    if action != "approve":
+        await _mark_failed_and_publish(
+            run_id,
+            f"unsupported plan approval action: {action}",
+            bus,
+        )
+        await bus.close(run_id)
+        return
+
+    try:
+        validated_plan = (
+            Plan.model_validate(plan).model_dump()
+            if plan is not None
+            else None
+        )
+        checkpointer = get_checkpointer()
+        if checkpointer is None:
+            raise RuntimeError("cannot approve plan without a LangGraph checkpointer")
+
+        graph = build_graph(
+            bus,
+            checkpointer=checkpointer,
+            hitl_plan_approval=settings.hitl_plan_approval_enabled,
+        )
+        config = graph_config(run_id, checkpointer)
+
+        with Session(engine) as session:
+            run = repository.get_run(session, run_id)
+            if run is None or run.status != "awaiting_approval":
+                return
+
+            if validated_plan is not None:
+                run = repository.save_plan(session, run, validated_plan)
+
+            repository.mark_running(session, run)
+
+        if validated_plan is not None:
+            await graph.aupdate_state(
+                config,
+                {"plan": validated_plan},
+                as_node="planner",
+            )
+
+        await bus.publish(
+            run_id,
+            "status",
+            {
+                "status": "running",
+                "approved": True,
+                "edited": validated_plan is not None,
+            },
+        )
+        await _drive_graph(run_id, None, allow_pause=False)
+    except Exception as exc:
+        logger.exception("Blog run %s failed while handling plan approval", run_id)
+        reason = f"{type(exc).__name__}: {exc}"
+        await _mark_failed_and_publish(run_id, reason, bus)
+        await bus.close(run_id)
