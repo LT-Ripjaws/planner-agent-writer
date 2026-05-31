@@ -1,42 +1,9 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
-
 /*
- * BrewNarrate theme — "espresso, caramel & cream" (Tailwind 4, CSS-first).
- * Dark-first: .dark is the demo-faithful star (warm near-black espresso, caramel
- * gold accent, cream ink). :root is a tasteful cream-paper light alternate.
+ * BrewNarrate theme "espresso, caramel & cream" .)
  */
 :root {
-  /* Light — warm cream paper alternate */
-  --background: 34 38% 92%;
-  --foreground: 24 28% 14%;
-  --card: 36 50% 97%;
-  --card-foreground: 24 28% 14%;
-  --popover: 36 50% 97%;
-  --popover-foreground: 24 28% 14%;
-  --primary: 28 53% 46%; /* caramel, deeper for light contrast */
-  --primary-foreground: 40 50% 98%;
-  --secondary: 34 35% 89%;
-  --secondary-foreground: 24 26% 18%;
-  --muted: 34 30% 89%;
-  --muted-foreground: 26 16% 40%;
-  --accent: 33 44% 85%; /* soft latte hover */
-  --accent-foreground: 24 28% 16%;
-  --destructive: 8 58% 44%;
-  --destructive-foreground: 40 50% 98%;
-  --success: 147 36% 32%;
-  --success-foreground: 40 50% 98%;
-  --warning: 31 64% 42%;
-  --warning-foreground: 40 50% 98%;
-  --border: 32 32% 82%;
-  --input: 32 32% 82%;
-  --ring: 28 53% 46%;
-  --radius: 0.875rem;
-}
-
-.dark {
-  /* Dark — the star: warm espresso */
   --background: 26 35% 7%; /* near-black espresso */
   --foreground: 34 40% 90%; /* warm cream */
   --card: 26 28% 11%; /* raised warm brown */
@@ -60,6 +27,10 @@
   --border: 28 22% 18%;
   --input: 28 22% 18%;
   --ring: 30 60% 58%;
+  --radius: 0.875rem;
+
+  /* Espresso ink for image scrims/vignettes — referenced as hsl(var(--ink)/x). */
+  --ink: 26 45% 4%;
 }
 
 @theme inline {
@@ -142,6 +113,11 @@
     border-color: hsl(var(--border));
   }
 
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+
   body {
     min-height: 100vh;
     background: hsl(var(--background));
@@ -189,7 +165,6 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
 }
 
-/* Respect users who prefer less motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,0 +1,9 @@
+{
+  "// note": "Tailwind 4 uses custom at-rules (@theme, @utility, @custom-variant, @apply). The built-in CSS validator doesn't know them, so silence its 'Unknown at rule' warning. The Tailwind CSS IntelliSense extension understands them properly.",
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

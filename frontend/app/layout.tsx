@@ -51,8 +51,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      suppressHydrationWarning
       className={cn(
+        "dark",
         geistSans.variable,
         geistMono.variable,
         fraunces.variable,

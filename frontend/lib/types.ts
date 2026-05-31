@@ -120,6 +120,11 @@ export interface QualityReport {
   sections_to_redo: number[];
 }
 
+export interface PlanApprovalDecision {
+  action: "approve" | "reject";
+  plan?: Plan | null;
+}
+
 export type RunEventName =
   | "status"
   | "node_started"

@@ -3,6 +3,7 @@ import type {
   BlogRunDetail,
   BlogRunResult,
   BlogRunSummary,
+  PlanApprovalDecision,
 } from "@/lib/types";
 
 const DEFAULT_API_URL = "http://localhost:8000";
@@ -90,4 +91,25 @@ export function getRun(runId: string, init?: ApiRequestInit) {
 
 export function getResult(runId: string, init?: ApiRequestInit) {
   return apiRequest<BlogRunResult>(`/api/blog-runs/${runId}/result`, init);
+}
+
+export function resumeRun(runId: string) {
+  return apiRequest<BlogRunSummary>(`/api/blog-runs/${runId}/resume`, {
+    method: "POST",
+  });
+}
+
+export function approvePlan(runId: string, decision: PlanApprovalDecision) {
+  return apiRequest<BlogRunSummary>(`/api/blog-runs/${runId}/approve-plan`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(decision),
+  });
+}
+
+/** Absolute URL for the SSE stream (EventSource can't use the relative fetch wrapper). */
+export function runEventsUrl(runId: string) {
+  return `${getApiBaseUrl()}/api/blog-runs/${runId}/events`;
 }
