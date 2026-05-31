@@ -1,58 +1,202 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * BrewNarrate theme — "espresso, caramel & cream" (Tailwind 4, CSS-first).
+ * Dark-first: .dark is the demo-faithful star (warm near-black espresso, caramel
+ * gold accent, cream ink). :root is a tasteful cream-paper light alternate.
+ */
+:root {
+  /* Light — warm cream paper alternate */
+  --background: 34 38% 92%;
+  --foreground: 24 28% 14%;
+  --card: 36 50% 97%;
+  --card-foreground: 24 28% 14%;
+  --popover: 36 50% 97%;
+  --popover-foreground: 24 28% 14%;
+  --primary: 28 53% 46%; /* caramel, deeper for light contrast */
+  --primary-foreground: 40 50% 98%;
+  --secondary: 34 35% 89%;
+  --secondary-foreground: 24 26% 18%;
+  --muted: 34 30% 89%;
+  --muted-foreground: 26 16% 40%;
+  --accent: 33 44% 85%; /* soft latte hover */
+  --accent-foreground: 24 28% 16%;
+  --destructive: 8 58% 44%;
+  --destructive-foreground: 40 50% 98%;
+  --success: 147 36% 32%;
+  --success-foreground: 40 50% 98%;
+  --warning: 31 64% 42%;
+  --warning-foreground: 40 50% 98%;
+  --border: 32 32% 82%;
+  --input: 32 32% 82%;
+  --ring: 28 53% 46%;
+  --radius: 0.875rem;
+}
+
+.dark {
+  /* Dark — the star: warm espresso */
+  --background: 26 35% 7%; /* near-black espresso */
+  --foreground: 34 40% 90%; /* warm cream */
+  --card: 26 28% 11%; /* raised warm brown */
+  --card-foreground: 34 40% 90%;
+  --popover: 26 30% 10%;
+  --popover-foreground: 34 40% 90%;
+  --primary: 30 60% 58%; /* caramel / gold pop */
+  --primary-foreground: 26 35% 10%;
+  --secondary: 26 20% 17%;
+  --secondary-foreground: 34 40% 90%;
+  --muted: 26 18% 16%;
+  --muted-foreground: 30 18% 62%;
+  --accent: 28 24% 20%; /* warm hover */
+  --accent-foreground: 34 42% 92%;
+  --destructive: 9 55% 52%;
+  --destructive-foreground: 40 50% 97%;
+  --success: 147 38% 48%;
+  --success-foreground: 26 35% 10%;
+  --warning: 36 70% 55%;
+  --warning-foreground: 26 35% 10%;
+  --border: 28 22% 18%;
+  --input: 28 22% 18%;
+  --ring: 30 60% 58%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+  --font-script: var(--font-dancing-script);
+
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+
+  --shadow-warm: 0 6px 22px rgba(40, 22, 10, 0.1);
+  --shadow-warm-lg: 0 16px 44px rgba(40, 22, 10, 0.16);
+
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
+  --animate-steam: steam 2.8s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @keyframes steam {
+    0% {
+      opacity: 0;
+      transform: translateY(0) scaleX(1);
+    }
+    50% {
+      opacity: 0.7;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-14px) scaleX(1.3);
+    }
+  }
+}
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-  }
-
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
 
   body {
-    @apply bg-background text-foreground;
+    min-height: 100vh;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    /* faint warm glow from the top — like light through a café window */
+    background-image: radial-gradient(
+      125% 85% at 50% -12%,
+      hsl(var(--primary) / 0.08),
+      transparent 60%
+    );
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.24);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-serif), Georgia, Cambria, serif;
+    font-optical-sizing: auto;
+  }
+}
+
+/* Dark shadows read deeper on espresso */
+.dark {
+  --shadow-warm: 0 6px 22px rgba(0, 0, 0, 0.4);
+  --shadow-warm-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+/* Warm shadow utilities (token-driven so dark overrides apply) */
+@utility shadow-warm {
+  box-shadow: var(--shadow-warm);
+}
+@utility shadow-warm-lg {
+  box-shadow: var(--shadow-warm-lg);
+}
+
+/* Subtle paper grain for cozy depth */
+@utility bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -2,7 +2,7 @@ import type {
   BlogRunCreate,
   BlogRunDetail,
   BlogRunResult,
-  BlogRunSummary
+  BlogRunSummary,
 } from "@/lib/types";
 
 const DEFAULT_API_URL = "http://localhost:8000";
@@ -32,6 +32,7 @@ export function getApiBaseUrl() {
 
 async function parseResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
+
   if (contentType.includes("application/json")) {
     return response.json();
   }
@@ -41,16 +42,17 @@ async function parseResponse(response: Response) {
 
 async function apiRequest<TResponse>(
   path: string,
-  init: ApiRequestInit = {}
+  init: ApiRequestInit = {},
 ): Promise<TResponse> {
   const headers = new Headers(init.headers);
+
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
   }
 
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
-    headers
+    headers,
   });
   const body = await parseResponse(response);
 
@@ -70,14 +72,15 @@ export function createRun(payload: BlogRunCreate) {
   return apiRequest<BlogRunSummary>("/api/blog-runs", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
 export function listRuns(limit = 20, init?: ApiRequestInit) {
   const params = new URLSearchParams({ limit: String(limit) });
+
   return apiRequest<BlogRunSummary[]>(`/api/blog-runs?${params}`, init);
 }
 

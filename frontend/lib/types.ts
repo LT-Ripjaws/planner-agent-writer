@@ -120,11 +120,6 @@ export interface QualityReport {
   sections_to_redo: number[];
 }
 
-export interface PlanApprovalDecision {
-  action: "approve" | "reject";
-  plan?: Plan | null;
-}
-
 export type RunEventName =
   | "status"
   | "node_started"
@@ -135,7 +130,9 @@ export type RunEventName =
   | "done"
   | "error";
 
-export interface EventEnvelope<TData extends Record<string, unknown> = Record<string, unknown>> {
+export interface EventEnvelope<
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> {
   event: RunEventName;
   data: TData;
 }

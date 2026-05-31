@@ -13,23 +13,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             refetchOnWindowFocus: false,
             retry: 1,
-            staleTime: 10_000
-          }
-        }
-      })
+          },
+        },
+      }),
   );
 
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="dark"
+      enableSystem={false}
       disableTransitionOnChange
-      enableSystem
     >
-      <QueryClientProvider client={queryClient}>
-        {children}
-        <Toaster closeButton position="bottom-right" richColors />
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <Toaster richColors closeButton />
     </ThemeProvider>
   );
 }
