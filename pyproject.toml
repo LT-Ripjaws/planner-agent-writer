@@ -16,9 +16,24 @@ dependencies = [
     "slowapi",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
 [tool.fastapi]
 entrypoint = "backend.app.main:app"
 
 [tool.setuptools.packages.find]
 include = ["backend*"]
 exclude = ["frontend*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
