@@ -68,6 +68,7 @@ class BlogRunDetail(BlogRunSummary):
     error: str | None = None
     warnings: list[str] = Field(default_factory=list)
     plan: dict | None = None
+    markdown: str | None = None
 
 
 class PlanApprovalDecision(BaseModel):

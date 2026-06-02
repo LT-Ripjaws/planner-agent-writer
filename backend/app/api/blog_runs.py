@@ -61,6 +61,7 @@ def to_detail(run: BlogRun) -> BlogRunDetail:
         error=run.error,
         warnings=warnings_for(run),
         plan=plan if isinstance(plan, dict) else None,
+        markdown=run.markdown,
     )
 
 
