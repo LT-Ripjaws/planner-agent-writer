@@ -17,6 +17,9 @@ os.environ.setdefault("TAVILY_API_KEY", "test-key")
 os.environ.setdefault("RATE_LIMIT_RUNS_PER_MIN", "1000")
 os.environ.setdefault("QUALITY_EVAL_ENABLED", "false")
 os.environ.setdefault("HITL_PLAN_APPROVAL_ENABLED", "false")
+os.environ.setdefault("OPENROUTER_API_KEY", "")
+os.environ.setdefault("OPENAI_API_KEY", "")
+os.environ.setdefault("LLM_FALLBACK_ENABLED", "false")
 
 
 @pytest.fixture

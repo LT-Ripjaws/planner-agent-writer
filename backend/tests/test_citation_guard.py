@@ -1,4 +1,4 @@
-"""T4 — citation guard (no real provider calls).
+"""Citation guard (no real provider calls).
 
 Covers: clean markdown passes untouched; an off-whitelist link triggers one
 repair pass that can succeed; a repair that still violates preserves the draft
@@ -54,6 +54,12 @@ def test_extract_links_ignores_images():
     assert extract_links(text) == [("link", "https://x.com")]
 
 
+def test_extract_links_handles_parenthesized_urls():
+    url = "https://en.wikipedia.org/wiki/Hallucination_(artificial_intelligence)"
+    text = f"See [Wikipedia]({url})."
+    assert extract_links(text) == [("Wikipedia", url)]
+
+
 def test_whitelist_from_evidence():
     assert evidence_url_whitelist(EVIDENCE) == {WL}
 
@@ -104,14 +110,13 @@ async def test_clean_markdown_passes_through(monkeypatch):
     assert result["sections"][0][1].strip().startswith("## Section 1")
 
 
-# --- node: off-whitelist link repaired successfully -----------------------
+# --- node: off-whitelist link stripped deterministically ------------------
 
 
-async def test_off_whitelist_link_repaired(monkeypatch):
-    fake = FakeLLM(
-        repair_markdown=lambda human: f"## Section 1\n\nFixed body citing [src]({WL})."
+async def test_off_whitelist_link_stripped_without_llm(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
     )
-    monkeypatch.setattr(cg, "get_llm", lambda *a, **k: fake)
 
     state = {
         "plan": _plan(),
@@ -120,9 +125,7 @@ async def test_off_whitelist_link_repaired(monkeypatch):
     }
     result = await citation_guard_node(state)
 
-    # Repaired section now only cites the whitelisted url; no unresolved warning.
     assert "evil.com" not in result["final"]
-    assert WL in result["final"]
     assert not any("unresolved" in w for w in result["warnings"])
 
 
@@ -130,16 +133,14 @@ async def test_off_whitelist_link_repaired(monkeypatch):
 
 
 async def test_repair_still_invalid_records_warning(monkeypatch):
-    # The repair "fixes" nothing — still points off-whitelist.
-    fake = FakeLLM(
-        repair_markdown=lambda human: "## Section 1\n\nStill [bad](https://evil.com)."
-    )
+    # With no evidence, even repair cannot satisfy a required citation.
+    fake = FakeLLM(repair_markdown=lambda human: "## Section 1\n\nStill no citation.")
     monkeypatch.setattr(cg, "get_llm", lambda *a, **k: fake)
 
     state = {
-        "plan": _plan(),
-        "evidence": EVIDENCE,
-        "sections": [(1, "## Section 1\n\nBad [link](https://evil.com).")],
+        "plan": _plan(requires_citations=True),
+        "evidence": [],
+        "sections": [(1, "## Section 1\n\nNo citation.")],
     }
     result = await citation_guard_node(state)
 
@@ -148,11 +149,10 @@ async def test_repair_still_invalid_records_warning(monkeypatch):
     assert "Section 1" in result["final"]
 
 
-async def test_required_citations_missing_triggers_repair(monkeypatch):
-    fake = FakeLLM(
-        repair_markdown=lambda human: f"## Section 1\n\nNow cites [src]({WL})."
+async def test_required_citations_missing_adds_source_without_llm(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
     )
-    monkeypatch.setattr(cg, "get_llm", lambda *a, **k: fake)
 
     state = {
         "plan": _plan(requires_citations=True),
@@ -163,3 +163,124 @@ async def test_required_citations_missing_triggers_repair(monkeypatch):
 
     assert WL in result["final"]
     assert not any("unresolved" in w for w in result["warnings"])
+
+
+async def test_bracketed_source_url_becomes_markdown_link(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": EVIDENCE,
+        "sections": [(1, f"## Section 1\n\nClaim with odd citation 【{WL}】.")],
+    }
+    result = await citation_guard_node(state)
+
+    assert f"[source]({WL})" in result["final"]
+    assert "【" not in result["final"]
+    assert not result["warnings"]
+
+
+async def test_bracketed_markdown_link_is_unwrapped(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": EVIDENCE,
+        "sections": [(1, f"## Section 1\n\nClaim with wrapped citation 【[Allowed]({WL})】.")],
+    }
+    result = await citation_guard_node(state)
+
+    assert f"[Allowed]({WL})" in result["final"]
+    assert "【" not in result["final"]
+    assert not result["warnings"]
+
+
+async def test_bracketed_source_label_maps_to_whitelisted_link(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    evidence = [
+        {
+            "title": "What Are AI Hallucinations? - IBM",
+            "url": WL,
+            "source": "ibm.com",
+            "snippet": "s",
+        }
+    ]
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": evidence,
+        "sections": [(1, "## Section 1\n\nClaim with bracket label 【IBM】.")],
+    }
+    result = await citation_guard_node(state)
+
+    assert f"[source]({WL})" in result["final"]
+    assert "【" not in result["final"]
+    assert not result["warnings"]
+
+
+async def test_reference_definition_citation_lines_are_stripped(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": EVIDENCE,
+        "sections": [
+            (
+                1,
+                f"## Section 1\n\nClaim cites [Allowed]({WL}).\n\n[Allowed]: [source]({WL})",
+            )
+        ],
+    }
+    result = await citation_guard_node(state)
+
+    assert f"[Allowed]({WL})" in result["final"]
+    assert "[Allowed]:" not in result["final"]
+    assert not result["warnings"]
+
+
+async def test_nested_source_link_becomes_single_markdown_link(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": EVIDENCE,
+        "sections": [(1, f"## Section 1\n\nClaim with bad link [[source]]([source]({WL}) text.")],
+    }
+    result = await citation_guard_node(state)
+
+    assert f"[source]({WL})" in result["final"]
+    assert "[[source]]" not in result["final"]
+    assert not result["warnings"]
+
+
+async def test_reasoning_before_expected_heading_is_stripped(monkeypatch):
+    monkeypatch.setattr(
+        cg, "get_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called"))
+    )
+
+    state = {
+        "plan": _plan(requires_citations=True),
+        "evidence": EVIDENCE,
+        "sections": [
+            (
+                1,
+                "We need to write this section first.\n\n"
+                "## Section 1\n\nFinal body without scratch text.",
+            )
+        ],
+    }
+    result = await citation_guard_node(state)
+
+    assert "We need to write" not in result["final"]
+    assert result["final"].count("## Section 1") == 1
+    assert WL in result["final"]
