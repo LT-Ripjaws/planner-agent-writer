@@ -8,6 +8,8 @@ from langchain_core.runnables import RunnableConfig
 
 from backend.app.agents.graph import build_graph
 from backend.app.agents.state import State
+from backend.app.core.config import settings
+from backend.app.workers.retry import finalize_warnings
 
 
 def log(message: str) -> None:
@@ -43,13 +45,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout-seconds",
         type=int,
-        default=1500,
+        default=settings.run_fallback_timeout_seconds,
         help="Maximum time to wait for the full graph run.",
     )
     parser.add_argument(
         "--max-concurrency",
         type=int,
-        default=2,
+        default=settings.writer_max_concurrency,
         help="Maximum concurrent LangGraph tasks. Provider-dependent; "
         "bump higher only on providers that don't stall under load.",
     )
@@ -62,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--writer-timeout-seconds",
         type=int,
-        default=360,
+        default=settings.writer_timeout_seconds,
         help="Maximum time to wait for each writer section.",
     )
 
@@ -165,7 +167,7 @@ async def run() -> None:
         log("graph finished without final Markdown")
         raise SystemExit(1)
 
-    warnings = final_state.get("warnings") or []
+    warnings = finalize_warnings(final_state)
     if warnings:
         log(f"completed with {len(warnings)} warning(s):")
         for warning in warnings:
@@ -175,6 +177,14 @@ async def run() -> None:
 
 
 def main() -> None:
+    # The final Markdown can contain non-cp1252 characters (e.g. the
+    # non-breaking hyphen ‑ that reasoning models like to emit in titles).
+    # Force UTF-8 so `print(final)` doesn't crash on the Windows console.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
     asyncio.run(run())
 
 
