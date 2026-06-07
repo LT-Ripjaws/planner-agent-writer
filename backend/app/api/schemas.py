@@ -1,8 +1,14 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from backend.app.agents.state import Plan
 
@@ -29,7 +35,7 @@ def matched_jailbreak_phrase(text: str) -> str | None:
 
 class BlogRunCreate(BaseModel):
     topic: str = Field(min_length=3, max_length=500)
-    audience: str | None = None
+    audience: str | None = Field(default=None, max_length=200)
     tone: Literal["neutral", "technical", "casual", "authoritative"] = "neutral"
     blog_kind: Literal[
         "auto",
@@ -41,13 +47,17 @@ class BlogRunCreate(BaseModel):
     ] = "auto"
     research_mode: Literal["auto", "required", "off"] = "auto"
 
-    @field_validator("topic")
+    @field_validator("topic", "audience")
     @classmethod
-    def reject_jailbreak_topics(cls, value: str) -> str:
+    def reject_jailbreak_text(cls, value: str | None) -> str | None:
+        # Both free-text fields flow into prompts; deny the common low-effort
+        # injection phrases on either. `audience` is optional, so skip None.
+        if value is None:
+            return value
         match = matched_jailbreak_phrase(value)
         if match is not None:
             raise ValueError(
-                f"Topic contains a disallowed phrase ('{match}'). "
+                f"Input contains a disallowed phrase ('{match}'). "
                 "Please rephrase to describe the subject you want written about."
             )
         return value
@@ -62,6 +72,15 @@ class BlogRunSummary(BaseModel):
     blog_title: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("created_at", "updated_at")
+    def _serialize_utc(self, value: datetime) -> str:
+        # Timestamps are stored as UTC, but SQLite drops tzinfo on round-trip so
+        # they come back naive. Stamp them as UTC before serializing so clients
+        # (e.g. JS `new Date(...)`) don't misread the naive value as local time.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
 
 
 class BlogRunDetail(BlogRunSummary):
