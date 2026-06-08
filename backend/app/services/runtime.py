@@ -26,3 +26,12 @@ def set_checkpointer(checkpointer: Optional[BaseCheckpointSaver]) -> None:
 
 def get_checkpointer() -> Optional[BaseCheckpointSaver]:
     return _checkpointer
+
+
+async def delete_checkpoints_for_run(run_id: str) -> None:
+    """Delete LangGraph checkpoint history for a blog run, when available."""
+    checkpointer = get_checkpointer()
+    if checkpointer is None:
+        return
+
+    await checkpointer.adelete_thread(run_id)
