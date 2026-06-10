@@ -16,7 +16,7 @@ from backend.app.db.base import engine
 from backend.app.db.models import BlogRun
 from backend.app.services.progress import ProgressBus, get_progress_bus
 from backend.app.services.runtime import get_checkpointer
-from backend.app.workers.retry import retry_placeholders
+from backend.app.workers.retry import finalize_warnings, retry_placeholders
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def build_initial_state(run: BlogRun) -> State:
         "tone": run.tone,
         "blog_kind": run.blog_kind,
         "research_mode": run.research_mode,
-        "writer_timeout_seconds": 360,
+        "writer_timeout_seconds": settings.writer_timeout_seconds,
     }
 
 
@@ -97,11 +97,11 @@ def persist_partial(run_id: str, state: Mapping[str, Any]) -> None:
 def graph_config(run_id: str, checkpointer: object | None) -> RunnableConfig:
     if checkpointer is not None:
         return {
-            "max_concurrency": 3,
+            "max_concurrency": settings.writer_max_concurrency,
             "configurable": {"thread_id": run_id},
         }
 
-    return {"max_concurrency": 3}
+    return {"max_concurrency": settings.writer_max_concurrency}
 
 
 def snapshot_values(
@@ -208,18 +208,21 @@ async def _finalize_run(
     bus: ProgressBus,
 ) -> None:
     """Post-graph: placeholder retry, persist, mark completed, emit terminal events."""
-    retry_update = await retry_placeholders(run_id, final_state, bus)
+    retry_update: dict[str, Any] = {}
+    if not final_state.get("placeholder_retry_attempted"):
+        retry_update = await retry_placeholders(run_id, final_state, bus)
     if retry_update:
         final_state = {**final_state, **retry_update}
         persist_partial(run_id, final_state)
-        await bus.publish(
-            run_id,
-            "node_completed",
-            {"node": "retry", "recovered": True},
-        )
+        if retry_update.get("sections"):
+            await bus.publish(
+                run_id,
+                "node_completed",
+                {"node": "retry", "recovered": True},
+            )
 
     final = str(final_state.get("final", "")).strip()
-    warnings = [str(warning) for warning in final_state.get("warnings", [])]
+    warnings = finalize_warnings(final_state)
 
     with Session(engine) as session:
         run = repository.get_run(session, run_id)

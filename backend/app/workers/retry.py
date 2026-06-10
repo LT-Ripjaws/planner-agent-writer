@@ -22,6 +22,7 @@ from typing import Any
 
 from backend.app.agents.state import State
 from backend.app.agents.nodes.writer import writer_node
+from backend.app.core.config import settings
 from backend.app.services.progress import ProgressBus
 
 logger = logging.getLogger(__name__)
@@ -58,25 +59,47 @@ def _rebuild_final(plan: dict[str, Any] | None, sections: list[tuple[int, str]])
     return f"# {title}\n\n{body}".strip()
 
 
-def _drop_warnings_for(warnings: list[str], retried_task_ids: set[int]) -> list[str]:
-    """Remove writer warnings whose task id is in ``retried_task_ids``.
+def _writer_warning_task_id(warning: str) -> int | None:
+    """Parse the task id out of a writer placeholder warning, or None.
 
     Warning format from `writer_node.placeholder_section`:
         "writer task=N (Title): reason"
     """
+    if "writer task=" not in warning:
+        return None
+    try:
+        after = warning.split("writer task=", 1)[1]
+        return int(after.split(" ", 1)[0].rstrip(":"))
+    except (ValueError, IndexError):
+        return None
+
+
+def finalize_warnings(state: Mapping[str, Any]) -> list[str]:
+    """Authoritative warning list for a finished run.
+
+    ``State.warnings`` is an ``operator.add`` channel, so nodes can append but
+    never remove. Two artifacts therefore need cleaning once the graph is done:
+
+    1. A ``writer task=N ... timeout/error`` warning whose section was later
+       recovered (placeholder retry, or a quality improvement pass) is stale —
+       drop it when section N is present and no longer a placeholder.
+    2. Nodes that run more than once (citation_guard re-runs inside the quality
+       loop) can append an identical warning repeatedly — dedupe, preserving
+       first-seen order.
+    """
+    sections = {task_id: body for task_id, body in state.get("sections", [])}
+    seen: set[str] = set()
     kept: list[str] = []
-    for warning in warnings:
-        # Find "task=N" anywhere in the warning text
-        if "writer task=" in warning:
-            try:
-                # crude but stable parser; matches "writer task=N "
-                after = warning.split("writer task=", 1)[1]
-                task_id_str = after.split(" ", 1)[0].rstrip(":")
-                task_id = int(task_id_str)
-                if task_id in retried_task_ids:
-                    continue
-            except (ValueError, IndexError):
-                pass
+    for raw in state.get("warnings", []):
+        warning = str(raw)
+        task_id = _writer_warning_task_id(warning)
+        if task_id is not None:
+            body = sections.get(task_id)
+            if body is not None and PLACEHOLDER_MARKER not in body:
+                continue  # section was recovered; the warning is stale
+        if warning in seen:
+            continue
+        seen.add(warning)
         kept.append(warning)
     return kept
 
@@ -133,7 +156,10 @@ async def retry_placeholders(
             "evidence": state.get("evidence", []),
             "plan": plan,
             "task": task,
-            "writer_timeout_seconds": state.get("writer_timeout_seconds", 360),
+            "writer_timeout_seconds": state.get(
+                "writer_timeout_seconds",
+                settings.writer_timeout_seconds,
+            ),
         }
 
         try:
@@ -159,16 +185,17 @@ async def retry_placeholders(
         succeeded_task_ids.add(task_id)
 
     if not succeeded_task_ids:
-        return {}
+        return {"placeholder_retry_attempted": True}
 
-    cleaned_warnings = _drop_warnings_for(
-        [str(w) for w in state.get("warnings", [])],
-        succeeded_task_ids,
-    )
     new_final = _rebuild_final(plan if isinstance(plan, dict) else None, new_sections)
 
+    # NOTE: `State.warnings` is an `operator.add` channel — returning a filtered
+    # list here would *append* it (re-adding the resolved warning and
+    # duplicating the rest). We add nothing; the stale warning for a recovered
+    # section is pruned authoritatively by `finalize_warnings()` at run end.
     return {
         "sections": new_sections,
-        "warnings": cleaned_warnings,
+        "warnings": [],
         "final": new_final,
+        "placeholder_retry_attempted": True,
     }
