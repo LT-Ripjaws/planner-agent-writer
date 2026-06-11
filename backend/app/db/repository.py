@@ -42,6 +42,11 @@ def get_run(session: Session, run_id: str) -> BlogRun | None:
     return session.get(BlogRun, run_id)
 
 
+def delete_run(session: Session, run: BlogRun) -> None:
+    session.delete(run)
+    session.commit()
+
+
 def update_step(session: Session, run: BlogRun, progress_step: str) -> BlogRun:
     run.progress_step = progress_step
     run.updated_at = utc_now()

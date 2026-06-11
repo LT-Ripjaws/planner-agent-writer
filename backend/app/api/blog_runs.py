@@ -16,11 +16,15 @@ from backend.app.db import repository
 from backend.app.db.base import get_session
 from backend.app.db.models import BlogRun
 from backend.app.deps import limiter
+from backend.app.services.runtime import delete_checkpoints_for_run
 from backend.app.workers import runner
 
 router = APIRouter(prefix="/blog-runs", tags=["blog-runs"])
 
 RESULT_STATUSES = {"completed", "completed_with_warnings"}
+# Terminal states a user may remove. In-flight runs (queued, running,
+# awaiting_approval) are not deletable — let them finish or fail first.
+DELETABLE_STATUSES = RESULT_STATUSES | {"failed"}
 
 
 def parse_json_value(value: str | None, fallback: Any) -> Any:
@@ -132,6 +136,28 @@ def get_blog_run_result(
         citations=[],
         quality_report=quality if isinstance(quality, dict) else None,
     )
+
+
+@router.delete("/{run_id}", status_code=204)
+async def delete_blog_run(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    run = repository.get_run(session, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Blog run not found")
+
+    if run.status not in DELETABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete run in status '{run.status}'; "
+                "only completed or failed runs can be deleted"
+            ),
+        )
+
+    await delete_checkpoints_for_run(run.id)
+    repository.delete_run(session, run)
 
 
 @router.post("/{run_id}/resume", status_code=202, response_model=BlogRunSummary)
