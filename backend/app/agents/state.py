@@ -3,6 +3,32 @@ from typing import Annotated, Any, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
+
+def merge_sections(
+    left: list[tuple[int, str]],
+    right: list[tuple[int, str]],
+) -> list[tuple[int, str]]:
+    """Reducer for ``State.sections`` — concatenate but **dedupe by task id**,
+    last-write-wins, preserving first-seen order.
+
+    The writer fan-out emits one section per task, and LangGraph merges those
+    parallel returns into the accumulator — so distinct ids still accumulate
+    normally. But nodes that *rewrite* the whole list (citation_guard, the
+    quality improvement loop) return sections whose ids are already present.
+    With plain ``operator.add`` those rewrites would be appended, producing two
+    copies of the same section (one pre-repair, one post-repair). This reducer
+    overwrites the existing entry for a repeated id instead, keeping exactly one
+    section per task. Order is by first appearance, which the reducer/citation
+    guard re-sort by id anyway.
+    """
+    merged: dict[int, str] = {}
+    order: list[int] = []
+    for task_id, body in [*left, *right]:
+        if task_id not in merged:
+            order.append(task_id)
+        merged[task_id] = body
+    return [(task_id, merged[task_id]) for task_id in order]
+
 BlogKind = Literal[
     "explainer",
     "tutorial",
@@ -111,13 +137,15 @@ class State(TypedDict, total=False):
     as_of: str
     recency_days: int
 
-    sections: Annotated[list[tuple[int, str]], operator.add]
+    sections: Annotated[list[tuple[int, str]], merge_sections]
     merged_md: str
     final: str
     warnings: Annotated[list[str], operator.add]
     max_sections: int
     writer_timeout_seconds: int
+    placeholder_retry_attempted: bool
 
     # quality evaluation
     quality_report: dict[str, Any]
     improvement_iter: int
+    quality_elapsed_seconds: float

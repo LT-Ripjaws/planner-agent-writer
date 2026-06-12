@@ -1,3 +1,4 @@
+from backend.app.agents.markdown_sanitize import clean_title, clean_markdown_headings
 from backend.app.agents.state import Plan, State
 
 
@@ -12,9 +13,12 @@ def require_plan(state: State) -> Plan:
 def reducer_node(state: State) -> State:
     plan = require_plan(state)
     sections = state.get("sections", [])
-    ordered_sections = [section for _, section in sorted(sections, key=lambda item: item[0])]
+    ordered_sections = [
+        clean_markdown_headings(section)
+        for _, section in sorted(sections, key=lambda item: item[0])
+    ]
     body = "\n\n".join(section.strip() for section in ordered_sections if section.strip())
-    final = f"# {plan.blog_title}\n\n{body}".strip()
+    final = f"# {clean_title(plan.blog_title)}\n\n{body}".strip()
 
     return {
         "merged_md": final,

@@ -3,9 +3,10 @@ from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from backend.app.agents.markdown_sanitize import clean_title
 from backend.app.agents.prompts import PLANNER_SYSTEM, wrap_untrusted
 from backend.app.agents.state import BlogKind, Plan, State
-from backend.app.services.llm import get_llm, structured
+from backend.app.services.llm import get_llm, structured, with_role_fallback
 
 ALLOWED_BLOG_KINDS: set[BlogKind] = {
     "explainer",
@@ -44,7 +45,7 @@ def build_planner_prompt(state: State) -> str:
     return f"""
 {wrap_untrusted("user_topic", require_topic(state))}
 
-Audience: {state.get("audience") or "general"}
+{wrap_untrusted("audience", state.get("audience") or "general")}
 Tone: {state.get("tone") or "neutral"}
 Requested blog kind: {requested_blog_kind(state) or "auto"}
 Research mode: {state.get("research_mode", "auto")}
@@ -59,6 +60,8 @@ Use concise task titles and concrete bullets.
 
 
 def normalize_plan(plan: Plan, state: State) -> Plan:
+    plan.blog_title = clean_title(plan.blog_title)
+
     forced_kind = requested_blog_kind(state)
     if forced_kind is not None:
         plan.blog_kind = forced_kind
@@ -68,6 +71,7 @@ def normalize_plan(plan: Plan, state: State) -> Plan:
 
     for index, task in enumerate(plan.tasks, start=1):
         task.id = index
+        task.title = clean_title(task.title, fallback=f"Section {index}")
 
         if state.get("mode") == "open_book":
             task.requires_research = True
@@ -77,8 +81,9 @@ def normalize_plan(plan: Plan, state: State) -> Plan:
 
 
 async def planner_node(state: State) -> State:
-    llm = get_llm(temperature=0.3)
-    chain = structured(llm, Plan)
+    primary = structured(get_llm(role="planner", temperature=0.3), Plan)
+    fallback = structured(get_llm(role="fallback", temperature=0.3), Plan)
+    chain = with_role_fallback(primary, fallback)
 
     raw_plan = await chain.ainvoke(
         [

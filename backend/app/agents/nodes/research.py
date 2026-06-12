@@ -2,6 +2,7 @@ import asyncio
 from datetime import date, datetime, timedelta
 
 from backend.app.agents.state import EvidenceItem, State
+from backend.app.core.config import settings
 from backend.app.services.search import dedupe_evidence, tavily_search_async
 
 
@@ -62,9 +63,42 @@ async def research_node(state: State) -> State:
 
         return {"evidence": []}
 
+    # Fail fast with the real cause when the search backend isn't configured,
+    # instead of letting every per-query call raise and surfacing a misleading
+    # "no usable results" downstream.
+    if not settings.tavily_api_key:
+        message = (
+            "TAVILY_API_KEY is not configured, so research mode cannot run. "
+            "Set it in the backend .env, or submit with research mode 'off'."
+        )
+        if state.get("research_mode") == "required":
+            raise ResearchEmpty(message)
+        return {"evidence": [], "warnings": [message]}
+
     max_results = state.get("max_results_per_query", 5)
+
+    async def search_with_retry(query: str) -> list[EvidenceItem]:
+        last_exc: BaseException | None = None
+        for attempt in range(2):
+            try:
+                items = await tavily_search_async(query, max_results=max_results)
+            except BaseException as exc:  # noqa: BLE001
+                last_exc = exc
+                if attempt == 1:
+                    raise
+                await asyncio.sleep(1)
+                continue
+
+            if items or attempt == 1:
+                return items
+            await asyncio.sleep(1)
+
+        if last_exc is not None:
+            raise last_exc
+        return []
+
     results_by_query = await asyncio.gather(
-        *[tavily_search_async(query, max_results=max_results) for query in queries],
+        *[search_with_retry(query) for query in queries],
         return_exceptions=True,
     )
 
@@ -79,15 +113,28 @@ async def research_node(state: State) -> State:
         evidence.extend(result)
 
     evidence = dedupe_evidence(evidence)
-    evidence = filter_by_recency(
+    recent = filter_by_recency(
         evidence,
         as_of=state.get("as_of"),
         recency_days=state.get("recency_days"),
     )
+    # Recency is a ranking preference, not a hard gate. If the filter would
+    # discard every hit we actually found — common for evergreen topics in
+    # `hybrid` (45d) or `open_book` (7d) mode, where the window is tight — keep
+    # the older sources instead of failing the whole run. Better to cite a
+    # slightly dated source than to error out with "no evidence found".
+    if evidence and not recent:
+        warnings.append(
+            "all evidence fell outside the "
+            f"{state.get('recency_days')}-day recency window; keeping older sources"
+        )
+    else:
+        evidence = recent
+
     evidence = sorted(evidence, key=lambda item: item.score or 0, reverse=True)[:16]
 
     if state.get("research_mode") == "required" and not evidence:
-        raise ResearchEmpty("Research was required, but no evidence was found.")
+        raise ResearchEmpty("Research was required, but Tavily returned no usable results.")
 
     return {
         "evidence": evidence_to_dicts(evidence),
