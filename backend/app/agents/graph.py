@@ -20,6 +20,7 @@ from backend.app.agents.nodes.writer import writer_node
 from backend.app.agents.state import Plan, State
 from backend.app.core.config import settings
 from backend.app.services.progress import ProgressBus
+from backend.app.workers.retry import retry_placeholders
 
 NodeFunc = Callable[[State], Awaitable[State] | State]
 AsyncNodeFunc = Callable[[State], Awaitable[State]]
@@ -57,7 +58,9 @@ def fanout_to_writers(state: State) -> list[Send]:
                 "evidence": state.get("evidence", []),
                 "plan": parsed_plan.model_dump(),
                 "task": task.model_dump(),
-                "writer_timeout_seconds": state.get("writer_timeout_seconds", 360),
+                "writer_timeout_seconds": state.get(
+                    "writer_timeout_seconds", settings.writer_timeout_seconds
+                ),
             },
         )
         for task in tasks
@@ -166,6 +169,14 @@ def build_graph(
         "reducer",
         RunnableLambda(wrap_with_progress("reducer", reducer_node, progress)),
     )
+    async def placeholder_retry_node(state: State) -> State:
+        run_id = state.get("run_id", "")
+        return await retry_placeholders(run_id, state, progress)
+
+    graph.add_node(
+        "placeholder_retry",
+        RunnableLambda(wrap_with_progress("placeholder_retry", placeholder_retry_node, progress)),
+    )
     graph.add_node(
         "citation_guard",
         RunnableLambda(wrap_with_progress("citation_guard", citation_guard_node, progress)),
@@ -187,7 +198,8 @@ def build_graph(
     graph.add_edge("research", "planner")
     graph.add_conditional_edges("planner", fanout_to_writers, ["writer"])
     graph.add_edge("writer", "reducer")
-    graph.add_edge("reducer", "citation_guard")
+    graph.add_edge("reducer", "placeholder_retry")
+    graph.add_edge("placeholder_retry", "citation_guard")
 
     if settings.quality_eval_enabled:
         # citation_guard → quality_eval; quality_eval loops back to itself
