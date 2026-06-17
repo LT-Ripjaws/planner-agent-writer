@@ -41,7 +41,7 @@ const STATUS_META: Record<string, StatusMeta> = {
     className: "bg-success/15 text-success",
   },
   completed_with_warnings: {
-    label: "Brewed · notes",
+    label: "Brewed, notes",
     icon: AlertTriangle,
     className: "bg-warning/15 text-warning",
   },

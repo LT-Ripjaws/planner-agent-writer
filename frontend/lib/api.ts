@@ -32,13 +32,50 @@ export function getApiBaseUrl() {
 }
 
 async function parseResponse(response: Response) {
-  const contentType = response.headers.get("content-type") || "";
+  // 204 No Content (e.g. a successful DELETE) carries no body — and FastAPI
+  // still sets `content-type: application/json` on it, so naively calling
+  // `response.json()` throws on the empty body and turns a successful delete
+  // into a spurious error. Read the body once and parse defensively.
+  if (response.status === 204) return null;
 
+  const text = await response.text();
+  if (!text) return null;
+
+  const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
-    return response.json();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
   }
 
-  return response.text();
+  return text;
+}
+
+function detailFromBody(body: unknown, status: number) {
+  if (typeof body === "object" && body !== null && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          if (
+            typeof item === "object" &&
+            item !== null &&
+            "msg" in item &&
+            typeof item.msg === "string"
+          ) {
+            return item.msg;
+          }
+          return String(item);
+        })
+        .join(" ");
+    }
+    return String(detail);
+  }
+
+  return `Request failed with status ${status}`;
 }
 
 async function apiRequest<TResponse>(
@@ -58,11 +95,7 @@ async function apiRequest<TResponse>(
   const body = await parseResponse(response);
 
   if (!response.ok) {
-    const detail =
-      typeof body === "object" && body !== null && "detail" in body
-        ? String((body as { detail: unknown }).detail)
-        : `Request failed with status ${response.status}`;
-
+    const detail = detailFromBody(body, response.status);
     throw new ApiError(detail, response.status, body);
   }
 
@@ -91,6 +124,12 @@ export function getRun(runId: string, init?: ApiRequestInit) {
 
 export function getResult(runId: string, init?: ApiRequestInit) {
   return apiRequest<BlogRunResult>(`/api/blog-runs/${runId}/result`, init);
+}
+
+export function deleteRun(runId: string) {
+  return apiRequest<void>(`/api/blog-runs/${runId}`, {
+    method: "DELETE",
+  });
 }
 
 export function resumeRun(runId: string) {

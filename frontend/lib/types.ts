@@ -44,6 +44,7 @@ export interface BlogRunDetail extends BlogRunSummary {
   error?: string | null;
   warnings: string[];
   plan?: Plan | null;
+  markdown?: string | null;
 }
 
 export interface BlogRunResult {
