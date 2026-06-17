@@ -12,3 +12,4 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 .tools/
+frontend/tsconfig.tsbuildinfo
