@@ -33,7 +33,7 @@ const dancingScript = Dancing_Script({
 
 export const metadata: Metadata = {
   metadataBase: new URL("http://localhost:3000"),
-  title: "BrewNarrate — brew a blog, steeped in research",
+  title: "BrewNarrate - brew a blog, steeped in research",
   description:
     "A cozy local workspace where an agent researches, plans, and writes a cited blog post while you watch it brew.",
   openGraph: {

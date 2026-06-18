@@ -2,8 +2,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Reveal } from "@/components/landing/reveal";
+import { Reveal, RevealGroup, RevealItem } from "@/components/landing/reveal";
 import { Button } from "@/components/ui/button";
+
+const FEATURES = [
+  "Live progress over Server-Sent Events with no refreshing",
+  "Sources, warnings, plan, quality, and article tabs",
+  "Resume a failed run from the workspace",
+];
 
 export function Showcase() {
   return (
@@ -49,20 +55,14 @@ export function Showcase() {
             planning, parallel section writing, citation checks, and quality
             review. The page is calm, but the work is visible.
           </p>
-          <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-center gap-2">
-              <span className="size-1.5 bg-primary" />
-              Live progress over Server-Sent Events with no refreshing
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="size-1.5 bg-primary" />
-              Sources, warnings, plan, quality, and article tabs
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="size-1.5 bg-primary" />
-              Resume a failed run from the workspace
-            </li>
-          </ul>
+          <RevealGroup className="mt-6 space-y-2 text-sm text-muted-foreground">
+            {FEATURES.map((feature) => (
+              <RevealItem key={feature} className="flex items-center gap-2">
+                <span className="size-1.5 bg-primary" />
+                {feature}
+              </RevealItem>
+            ))}
+          </RevealGroup>
           <Button asChild size="lg" className="mt-8 shadow-warm">
             <Link href="/dashboard">
               Open the workspace

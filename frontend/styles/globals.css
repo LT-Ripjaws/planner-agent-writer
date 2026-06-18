@@ -18,11 +18,15 @@
   --muted-foreground: 30 18% 62%;
   --accent: 28 24% 20%; /* warm hover */
   --accent-foreground: 34 42% 92%;
-  --destructive: 9 55% 52%;
+  /* Earthy, coffee-world status hues — desaturated + warm so they sit in the
+     espresso/caramel family instead of reading as generic traffic-light colors.
+     success = muted matcha / green-coffee-bean; destructive = burnt sienna /
+     over-roast; warning = honey-amber. */
+  --destructive: 14 58% 50%; /* burnt sienna / terracotta */
   --destructive-foreground: 40 50% 97%;
-  --success: 147 38% 48%;
+  --success: 104 24% 52%; /* muted sage / green-coffee-bean */
   --success-foreground: 26 35% 10%;
-  --warning: 36 70% 55%;
+  --warning: 38 68% 56%; /* honey amber */
   --warning-foreground: 26 35% 10%;
   --border: 28 22% 18%;
   --input: 28 22% 18%;
@@ -137,6 +141,29 @@
     background: hsl(var(--primary) / 0.24);
   }
 
+  /* Warm coffee scrollbar — caramel thumb on an espresso track. */
+  html {
+    scrollbar-color: hsl(var(--primary) / 0.5) hsl(var(--muted) / 0.4);
+    scrollbar-width: thin;
+  }
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.35);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.45);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.7);
+    background-clip: content-box;
+  }
+
   h1,
   h2,
   h3,
@@ -174,4 +201,34 @@
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.bn-markdown pre code.hljs {
+  background: transparent;
+  color: hsl(var(--foreground));
+  padding: 0;
+}
+
+.bn-markdown .hljs-comment,
+.bn-markdown .hljs-quote {
+  color: hsl(var(--muted-foreground));
+}
+
+.bn-markdown .hljs-keyword,
+.bn-markdown .hljs-selector-tag,
+.bn-markdown .hljs-subst {
+  color: hsl(var(--primary));
+}
+
+.bn-markdown .hljs-string,
+.bn-markdown .hljs-attr,
+.bn-markdown .hljs-symbol,
+.bn-markdown .hljs-bullet {
+  color: hsl(var(--success));
+}
+
+.bn-markdown .hljs-title,
+.bn-markdown .hljs-section,
+.bn-markdown .hljs-name {
+  color: hsl(var(--warning));
 }

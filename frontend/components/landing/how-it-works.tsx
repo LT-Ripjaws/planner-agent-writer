@@ -6,6 +6,8 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import { FileText, PenLine, Route, Search, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { RevealGroup, RevealItem } from "@/components/landing/reveal";
+
 type Step = {
   n: string;
   icon: LucideIcon;
@@ -53,48 +55,29 @@ const STEPS: Step[] = [
 ];
 
 function StoryStep({ step }: { step: Step }) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start 80%", "center 55%"],
-  });
-  const activeRaw = useTransform(scrollYProgress, [0, 1], [0.72, 1]);
-  const [active, setActive] = React.useState(reduce ? 1 : 0.72);
-
-  React.useEffect(() => {
-    if (reduce) return;
-    return activeRaw.on("change", setActive);
-  }, [activeRaw, reduce]);
-
   const Icon = step.icon;
 
   return (
-    <div ref={ref} className="relative pl-16">
-      <motion.span
-        style={{ opacity: active, scale: reduce ? 1 : 0.9 + active * 0.1 }}
-        className="absolute left-[18px] top-1 flex size-10 -translate-x-1/2 items-center justify-center border border-primary/50 bg-card/95 text-primary shadow-warm"
-      >
+    <RevealItem className="relative pl-16">
+      <span className="absolute left-[18px] top-1 flex size-10 -translate-x-1/2 items-center justify-center border border-primary/50 bg-card/95 text-primary shadow-warm">
         <Icon className="size-5" />
-      </motion.span>
+      </span>
 
-      <motion.div style={{ opacity: active }}>
-        <div className="flex items-baseline gap-3">
-          <span className="font-serif text-4xl font-semibold leading-none text-primary/90">
-            {step.n}
-          </span>
-          <div>
-            <h3 className="font-serif text-2xl font-semibold leading-tight text-foreground">
-              {step.title}
-            </h3>
-            <p className="text-sm font-medium text-primary">{step.kicker}</p>
-          </div>
+      <div className="flex items-baseline gap-3">
+        <span className="font-serif text-4xl font-semibold leading-none text-primary/90">
+          {step.n}
+        </span>
+        <div>
+          <h3 className="font-serif text-2xl font-semibold leading-tight text-foreground">
+            {step.title}
+          </h3>
+          <p className="text-sm font-medium text-primary">{step.kicker}</p>
         </div>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-          {step.body}
-        </p>
-      </motion.div>
-    </div>
+      </div>
+      <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+        {step.body}
+      </p>
+    </RevealItem>
   );
 }
 
@@ -150,15 +133,17 @@ export function HowItWorks() {
             </div>
           </div>
 
-          <div ref={railRef} className="relative space-y-14">
+          <div ref={railRef} className="relative">
             <div className="absolute bottom-2 left-[18px] top-2 w-px -translate-x-1/2 bg-border" />
             <motion.div
               style={{ scaleY: reduce ? 1 : fillScale }}
               className="absolute bottom-2 left-[18px] top-2 w-px -translate-x-1/2 origin-top bg-gradient-to-b from-primary to-primary/40"
             />
-            {STEPS.map((step) => (
-              <StoryStep key={step.n} step={step} />
-            ))}
+            <RevealGroup className="space-y-14">
+              {STEPS.map((step) => (
+                <StoryStep key={step.n} step={step} />
+              ))}
+            </RevealGroup>
           </div>
         </div>
       </div>
