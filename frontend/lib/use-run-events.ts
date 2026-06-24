@@ -5,26 +5,6 @@ import * as React from "react";
 import { runEventsUrl } from "@/lib/api";
 import type { BlogRunStatus, Plan, RunEventName } from "@/lib/types";
 
-/**
- * Live pipeline state, derived from the backend SSE stream.
- *
- * Wire format (see backend/app/api/events.py): each message is
- *   event: <name>
- *   data: { "data": { ...payload }, "created_at": <float> }
- * so the useful payload lives under `parsed.data`.
- *
- * Emitted event names + payloads (backend graph.py / runner.py / quality_evaluator.py):
- *   status          { status, snapshot?, progress_step?, warnings_count?, resumed? }
- *   node_started    { node, iter?, sections? }
- *   node_completed  { node, mode?, needs_research?, evidence_count?, section_count?,
- *                     blog_title?, task_id?, title?, score?, issues_count?,
- *                     hallucinations_count?, sections_to_redo?, improved?, recovered? }
- *   section         { task_id, title }
- *   warning         { message }
- *   awaiting_input  { type: "plan_approval", plan }
- *   done            { status }
- *   error           { reason }
- */
 
 export type NodeName =
   | "router"
@@ -42,7 +22,7 @@ export interface NodeState {
   status: NodeStatus;
   startedAt?: number;
   endedAt?: number;
-  /** Short live subtitle, e.g. "open_book · 4 sources" or "7 sections". */
+  /** Short live subtitle, e.g. "open_book / 4 sources" or "7 sections". */
   detail?: string;
 }
 
@@ -63,7 +43,7 @@ export interface RunEventsState {
   /** Total planned sections (from planner's section_count), for "N / M drafted". */
   plannedSectionCount: number | null;
   warnings: string[];
-  /** Latest quality score (0–10) if the evaluator has reported. */
+  /** Latest quality score (0-10) if the evaluator has reported. */
   qualityScore: number | null;
   qualityIter: number | null;
   /** Set when the graph pauses for HITL plan approval. */
@@ -128,6 +108,9 @@ function str(v: unknown): string | undefined {
 function num(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
+function stringList(v: unknown): string[] {
+  return Array.isArray(v) ? v.map((item) => String(item)) : [];
+}
 
 function reducer(state: RunEventsState, action: Action): RunEventsState {
   if (action.type === "reset") return initialState();
@@ -155,15 +138,29 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
       }
 
       if (status) next.status = status as BlogRunStatus;
-      const redoCount = num(data.warnings_count);
-      if (redoCount !== undefined && redoCount === 0) {
-        // keep as-is; warnings list is authoritative via `warning` events
-      }
+      // `warning` events are the authoritative source for the warnings list;
+      // the `warnings` array on a status event (if present) is a snapshot.
+      const warnings = stringList(data.warnings);
+      if (warnings.length) next.warnings = warnings;
       return next;
     }
 
     case "node_started": {
       const node = str(data.node) as NodeName | undefined;
+      if (data.node === "improvement") {
+        const iter = num(data.iter);
+        const sections = Array.isArray(data.sections) ? data.sections.length : 0;
+        return {
+          ...state,
+          qualityIter: iter ?? state.qualityIter,
+          nodes: setNode(state.nodes, "quality_eval", {
+            status: "active",
+            detail: `improving ${sections || "draft"}${
+              iter !== undefined ? ` (iter ${iter})` : ""
+            }`,
+          }),
+        };
+      }
       if (!node || !NODE_ORDER.includes(node)) return state;
       const iter = num(data.iter);
       return {
@@ -173,7 +170,7 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
           startedAt: at,
           detail:
             node === "quality_eval" && iter !== undefined
-              ? `evaluating${iter > 0 ? ` · pass ${iter}` : ""}`
+              ? `evaluating${iter > 0 ? ` / pass ${iter}` : ""}`
               : undefined,
         }),
       };
@@ -181,8 +178,26 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
 
     case "node_completed": {
       const node = str(data.node) as NodeName | undefined;
+      if (data.node === "improvement") {
+        const iter = num(data.iter);
+        const improved = num(data.improved);
+        return {
+          ...state,
+          qualityIter: iter ?? state.qualityIter,
+          nodes: setNode(state.nodes, "quality_eval", {
+            status: "active",
+            detail: `improved ${improved ?? 0}${
+              iter !== undefined ? ` (iter ${iter})` : ""
+            }`,
+          }),
+        };
+      }
+
       // Synthetic nodes ("improvement", "retry") aren't in the visible pipeline.
       if (!node || !NODE_ORDER.includes(node)) return state;
+      // The writer node is fanned out, so each individual completion is not
+      // the whole visible Writers step. Section events drive the aggregate.
+      if (node === "writer") return state;
 
       let detail: string | undefined;
       const patch: Partial<RunEventsState> = {};
@@ -191,7 +206,7 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
         const mode = str(data.mode);
         const needsResearch = data.needs_research === true;
         detail = mode
-          ? `${mode}${needsResearch ? " · researching" : " · closed-book"}`
+          ? `${mode}${needsResearch ? " / researching" : " / closed-book"}`
           : undefined;
         if (mode) patch.mode = mode;
         // Router decided no research → mark research skipped.
@@ -221,11 +236,13 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
         if (iter !== undefined) patch.qualityIter = iter;
       }
 
-      const nodes = setNode(patch.nodes ?? state.nodes, node, {
+      const nodePatch: Partial<NodeState> = {
         status: "done",
         endedAt: at,
-        detail,
-      });
+      };
+      if (detail !== undefined) nodePatch.detail = detail;
+
+      const nodes = setNode(patch.nodes ?? state.nodes, node, nodePatch);
 
       return { ...state, ...patch, nodes };
     }
@@ -246,11 +263,21 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
       const writerDetail = state.plannedSectionCount
         ? `${sections.length} / ${state.plannedSectionCount} drafted`
         : `${sections.length} drafted`;
+      const writerDone =
+        state.plannedSectionCount !== null &&
+        sections.length >= state.plannedSectionCount;
       return {
         ...state,
         sections,
         nodes: nodes.map((n) =>
-          n.name === "writer" ? { ...n, detail: writerDetail } : n,
+          n.name === "writer"
+            ? {
+                ...n,
+                status: writerDone ? "done" : "active",
+                endedAt: writerDone ? at : n.endedAt,
+                detail: writerDetail,
+              }
+            : n,
         ),
       };
     }
@@ -274,20 +301,47 @@ function reducer(state: RunEventsState, action: Action): RunEventsState {
 
     case "done": {
       const status = str(data.status) as BlogRunStatus | undefined;
+      const warnings = stringList(data.warnings);
+      // Finalize the timeline: any node still pending/active when the run
+      // succeeds is now done. (Resumed runs can fast-forward past the planner,
+      // so the writer never gets its "N / M drafted" close-out from section
+      // events — this guarantees the live view matches the completed state
+      // without needing a refresh.) Skipped/error nodes are left as-is.
+      const finalizedNodes = state.nodes.map((n) =>
+        n.status === "skipped" || n.status === "error"
+          ? n
+          : {
+              ...n,
+              status: "done" as NodeStatus,
+              endedAt: n.endedAt ?? at,
+            },
+      );
       return {
         ...state,
         status: status ?? state.status,
+        warnings: warnings.length ? warnings : state.warnings,
+        nodes: finalizedNodes,
         finished: true,
         connection: "closed",
       };
     }
 
     case "error": {
-      const reason = str(data.reason);
+      const reason = str(data.reason) ?? str(data.error);
+      const warnings = stringList(data.warnings);
+      // On failure, the node that was running is the one that broke -> mark it
+      // error; everything still pending stays pending (it never ran).
+      const finalizedNodes = state.nodes.map((n) =>
+        n.status === "active"
+          ? { ...n, status: "error" as NodeStatus, endedAt: n.endedAt ?? at }
+          : n,
+      );
       return {
         ...state,
         status: "failed",
+        warnings: warnings.length ? warnings : state.warnings,
         error: reason ?? "Run failed",
+        nodes: finalizedNodes,
         finished: true,
         connection: "closed",
       };
@@ -317,6 +371,7 @@ const EVENT_NAMES: RunEventName[] = [
 export function useRunEvents(
   runId: string | null,
   enabled = true,
+  resetKey: number | string = 0,
 ): RunEventsState {
   const [state, dispatch] = React.useReducer(reducer, undefined, initialState);
 
@@ -338,13 +393,22 @@ export function useRunEvents(
 
     const handle = (name: RunEventName) => (ev: MessageEvent) => {
       let data: Payload = {};
+      let at = Date.now();
       try {
         const parsed = JSON.parse(ev.data);
         data = (parsed?.data ?? parsed) as Payload;
+        // Prefer the server's event timestamp. On a re-subscribe the bus
+        // replays its buffered history, so without this every node's
+        // startedAt/endedAt would be stamped with the replay time and all
+        // durations would reset to ~0. The server time keeps them stable.
+        if (typeof parsed?.created_at === "string") {
+          const serverAt = Date.parse(parsed.created_at);
+          if (!Number.isNaN(serverAt)) at = serverAt;
+        }
       } catch {
         data = {};
       }
-      dispatch({ type: "event", name, data, at: Date.now() });
+      dispatch({ type: "event", name, data, at });
       if (name === "done" || name === "error") close();
     };
 
@@ -355,7 +419,7 @@ export function useRunEvents(
     });
 
     es.onerror = () => {
-      // If the run already ended, the server closed us — don't thrash reconnecting.
+      // If the run already ended, the server closed us; don't thrash reconnecting.
       if (es.readyState === EventSource.CLOSED) {
         dispatch({ type: "connection", value: "closed" });
       }
@@ -367,7 +431,7 @@ export function useRunEvents(
       );
       close();
     };
-  }, [runId, enabled]);
+  }, [runId, enabled, resetKey]);
 
   return state;
 }
